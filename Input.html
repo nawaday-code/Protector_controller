@@ -4,18 +4,15 @@
         <meta charset="utf-8">
         <title>imgInput</title>
         <link href="inputStyle.css" rel="stylesheet">
-        <script src="inputImgHandler.js"></script>
     </head>
     <body>
         <header>
             <h1>画像ハンドラー</h1>
         </header>
         <div class="">
-            <input type="file" name="imgfile">
+            <!-- .jpg .png にも対応予定 -->
+            <input type="file" id="imgFile" name="imgFile" accept=".dcm">
         </div>
-        <footer>
-
-        </footer>
     </body>
-
+    <script src="inputImgHandler.js"></script>
 </html>
