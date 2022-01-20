@@ -1,17 +1,16 @@
-
+//テストとしてテキストを読んでみる
 
 function inputChange() {
-    let buffer = new ArrayBuffer(4);
-    let dv = new DataView(buffer);
-    dv.setUint16(0, 2);
-    dv.setUint16(1, 28);
+    let files = imgFile.files;
+    let fileReader = new FileReader();
 
-    let group = dv.getUint16(0);
-    let element = dv.getUint16(1);
-    console.log(group);
-    console.log(group.toString(16));
-    console.log(element);
-    console.log(element.toString(16));
+    fileReader.addEventListener('load', function(e) {
+        console.log(e.target.result);
+    });
+    
+    //バッファを確保、その後2バイトでtag読み、あとは変調してバイト読み込み
+    fileReader.readAsArrayBuffer(files[0]);
+
 }
 
 let imgFile = document.getElementById('imgFile');
