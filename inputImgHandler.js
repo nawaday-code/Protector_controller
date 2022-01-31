@@ -7,11 +7,31 @@
 
 const fileReader = new FileReader();
 
-getInt8Array = (dataView, offset, length) => {
-    return Array.from(Array(length), (v, k) => dataView.getInt8(offset+k, true))
-}
+let canvas = document.getElementById('imgView');
+let ctx = canvas.getContext('2d');
+canvas.width = 256;
+canvas.height = 256;
+let dst = ctx.createImageData(canvas.width , canvas.height);
+dst.data = [[1,2,3],[4,5,6],[7,8,9]];
+// for (var i = 0; i < canvas.height; i++) {
+//     for (var j = 0; j < canvas.width; j++) {
+         
+//          var pix = (i*canvas.width + j) * 4;     // i-j Coordinate
 
-inputChange = () => {
+//          dst.data[pix] = i;       // Red
+//          dst.data[pix+1] = 0;     // Green
+//          dst.data[pix+2] = 0;     // Blue
+//          dst.data[pix+3] = 255;   // Alpha
+//     }
+// }
+
+ctx.putImageData(dst, 0, 0);
+
+
+const imgFile = document.getElementById('imgFile');
+imgFile.addEventListener('change', inputChange);
+
+function inputChange(){
     const files = imgFile.files;
     //バッファを確保、その後2バイトでtag読み、あとは変調してバイト読み込み
     fileReader.readAsArrayBuffer(files[0]);//ここの反応によっていろんなイベントが発生する
@@ -20,85 +40,90 @@ inputChange = () => {
         const dataViewer = new DataView(e.target.result);
         //以下は画像読み込みfuncでcapsulize
         getScaledImage(dataViewer);
+        //canvasに画像表示
     })
-
 }
 
-
-
-const imgFile = document.getElementById('imgFile');
-imgFile.addEventListener('change', inputChange);
-
-
-function getScaledImage(dataViewer) {
+function getScaledImage(dataView) {
+    let infoDict = new Map();
     let imgTags = [
-        {group:0x0028, element:0x1052},
-        {group:0x0028, element:0x1053}
-    ];
-    
-    // {0x0028:[0x1052, 0x1053]};
-    let resultDict = getTagInfo(dataViewer, imgTags);
-    console.log(resultDict);
-    // for (let i = 0; i < dataViewer.byteLength; i += 2) {
-    //     switch (dataViewer.getInt16(i, true)) {
-    //         case 0x0028:
-    //             //2byte分オフセットを進める
-    //             switch (dataViewer.getInt16(i + 2, true)) {
-    //                 case 0x1052:
-    //                     headerReader(dataViewer, i+4);
-    //                     break;
-    //                 case 0x1053:
-    //                     headerReader(dataViewer, i+4);
-    //                     break;
-    //                 default:
-    //                     break;
-    //             }
-    //             break;
-
-    //         default:
-    //             break;
-    //     }
-
-    // }
+        new Map([[0x0028, 0x0010]]),//Rows
+        new Map([[0x0028, 0x0011]]),//Columns
+        new Map([[0x0028, 0x1052]]),//Rescale Intercept
+        new Map([[0x0028, 0x1053]]),//Rescale Slope
+        new Map([[0x7FE0,0x0010]]), //Pixel Data
+    ]
+    const tagOffsetDict = getTagOffset(dataView, imgTags);
+    //ここのアロー関数引数は(key, value)ではないことに注意
+    tagOffsetDict.forEach((value, key) =>{
+        infoDict.set(key, tagDataReader(dataView, value))
+    })
+    console.log(infoDict);
+    return imgMaker(infoDict);
 }
 
-function getTagInfo(dataViewer, tags) {
-    let resultDict = {};
+function imgMaker(imgInfoDict) {
+    const scaledArray = imgInfoDict.get("(7fe0, 0010)").map(v => v * Number(imgInfoDict.get("(0028, 1053)")) + Number(imgInfoDict.get("(0028, 1052)")));
 
-    for (let offset = 0; offset < dataViewer.byteLength; offset +=2) {
-        const currentGroup = dataViewer.getInt16(offset, true);
-        if (tags.some(tag => tag.group === currentGroup)) {
-            const currentElement = dataViewer.getInt16(offset + 2, true);
-            if(tags.some(tag => tag.element === currentElement)){
-                console.log(currentGroup.toString(16));
-                console.log(currentElement.toString(16));
+}
+// const arr = [1,2,3,4,5,6,7,8,9];
+    
+// const newArr = [];
+// while(arr.length) newArr.push(arr.splice(0,3));
+    
+// console.log(newArr);
 
-                resultDict[{group:currentGroup.toString(16), element:currentElement.toString(16)}] = headerReader(dataViewer, offset+4);
+function getTagOffset(dataView, tags) {
+    let resultDict = new Map();
+
+    for (let offset = 0; offset < dataView.byteLength; offset+=2) {
+        const currentGroup = dataView.getUint16(offset, true);
+        if (tags.some(tag => tag.has(currentGroup))) {
+            const currentElement = dataView.getUint16(offset+2, true);
+            if(tags.some(tag => tag.get(currentGroup) === currentElement)){
+                const currentTag =`(${('0000' + currentGroup.toString(16)).slice(-4)}, ${('0000' + currentElement.toString(16)).slice(-4)})`
+                // const currentTag = new Map([
+                //     [currentGroup.toString(16), currentElement.toString(16)]
+                // ])
+                resultDict.set(currentTag,offset+4);
             }
         }
     }
     return resultDict;
 }
 
-function headerReader(dataViewer, offset) {
+function tagDataReader(dataView, offset) {
     let dataLength = 0;
-    //2byte分オフセットを進める
-    let VR = getInt8Array(dataViewer, offset, 4);
-    //すべてがリトルエンディアンというわけではない
-    //VRはビッグエンディアン、データの長さはリトルエンディアン。ややこしい
+    let data;
+    const VR = getUint8Array(dataView, offset, 4);
+    //以下、データ型の追加がまだまだ必要。後々追加。
     switch (String.fromCharCode(VR[0])+String.fromCharCode(VR[1])) {
         case "DS":
             dataLength = VR[3] * 10 + VR[2];
-            break;
-        // 画像は別funcで作る
-        // case "OW":
-        //     getInt8Array(dataViewer, offset+4,4)
-        //     break;
+            data = getUint8Array(dataView, offset + 4, dataLength);
+            return data.map(v => String.fromCharCode(v)).join("");
+        case "US":
+            dataLength = VR[3] * 10 + VR[2];
+            //データ型によってデータ中身の読み込み方法まで違う
+            data = dataView.getUint16(offset+4, true);
+            return data;
+        case "LO":
+            dataLength = VR[3] * 10 + VR[2];
+            data = getUint8Array(dataView, offset + 4, dataLength);
+            return data.map(v => String.fromCharCode(v)).join("");
+        case "OW":
+            //dataLengthBuffer(dLB)
+            const dLB = getUint8Array(dataView, offset+4, 4);
+            dataLength = dLB[3] * 10 ** 3 + dLB[2] * 10 ** 2 + dLB[1] * 10 + dLB[0];
+            data = getUint8Array(dataView, offset+8, dataLength);
+            return data;  
         default:
             dataLength = VR[3] * 10 ** 3 + VR[2] * 10 ** 2 + VR[1] * 10 + VR[0];
-            break;
+            data = getUint8Array(dataView, offset + 4, dataLength);
+            return data;
     }
-    let data = getInt8Array(dataViewer, offset + 4, dataLength);
-    return data.map(v => String.fromCharCode(v));
 }
 
+getUint8Array = (dataView, offset, length) => {
+    return Array.from(Array(length), (_v, k) => dataView.getUint8(offset+k, true))
+}
