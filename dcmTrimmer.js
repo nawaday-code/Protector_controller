@@ -7,12 +7,12 @@
 
 const fileReader = new FileReader();
 
-let canvas = document.getElementById('imgView');
-let ctx = canvas.getContext('2d');
-canvas.width = 256;
-canvas.height = 256;
-let dst = ctx.createImageData(canvas.width , canvas.height);
-dst.data = [[1,2,3],[4,5,6],[7,8,9]];
+// let canvas = document.getElementById('imgView');
+// let ctx = canvas.getContext('2d');
+// canvas.width = 256;
+// canvas.height = 256;
+// let dst = ctx.createImageData(canvas.width , canvas.height);
+// dst.data = [[1,2,3],[4,5,6],[7,8,9]];
 // for (var i = 0; i < canvas.height; i++) {
 //     for (var j = 0; j < canvas.width; j++) {
          
@@ -25,14 +25,14 @@ dst.data = [[1,2,3],[4,5,6],[7,8,9]];
 //     }
 // }
 
-ctx.putImageData(dst, 0, 0);
+// ctx.putImageData(dst, 0, 0);
 
 
-const imgFile = document.getElementById('imgFile');
-imgFile.addEventListener('change', inputChange);
+const dcmFile = document.getElementById('dcmFile');
+dcmFile.addEventListener('change', inputChange);
 
 function inputChange(){
-    const files = imgFile.files;
+    const files = dcmFile.files;
     //バッファを確保、その後2バイトでtag読み、あとは変調してバイト読み込み
     fileReader.readAsArrayBuffer(files[0]);//ここの反応によっていろんなイベントが発生する
     //↑のイベントの一部、ファイル読み込み後に発火するonload(もしくは'load')を使用。
@@ -82,9 +82,6 @@ function getTagOffset(dataView, tags) {
             const currentElement = dataView.getUint16(offset+2, true);
             if(tags.some(tag => tag.get(currentGroup) === currentElement)){
                 const currentTag =`(${('0000' + currentGroup.toString(16)).slice(-4)}, ${('0000' + currentElement.toString(16)).slice(-4)})`
-                // const currentTag = new Map([
-                //     [currentGroup.toString(16), currentElement.toString(16)]
-                // ])
                 resultDict.set(currentTag,offset+4);
             }
         }

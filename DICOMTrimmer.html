@@ -2,20 +2,20 @@
 <html>
     <head>
         <meta charset="utf-8">
-        <title>imgInput</title>
-        <link href="inputStyle.css" rel="stylesheet">
+        <title>DICOMTrimmer</title>
+        <link href="styleSheet.css" rel="stylesheet">
     </head>
     <body>
         <header>
-            <h1>画像ハンドラー</h1>
+            <h1>DICOM読み込み</h1>
         </header>
         <div>
             <!-- .jpg .png にも対応予定 -->
-            <input type="file" id="imgFile" name="imgFile" >
+            <input type="file" id="dcmFile" name="dcmFile" >
         </div>
         <div>
             <canvas id="imgView">no image</canvas>
         </div>
     </body>
-    <script src="inputImgHandler.js"></script>
+    <script src="dcmTrimmer.js"></script>
 </html>

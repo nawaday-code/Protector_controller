@@ -1,0 +1,21 @@
+<!DOCTYPE HTML>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>DICOMTrimmer</title>
+        <link href="styleSheet.css" rel="stylesheet">
+    </head>
+    <body>
+        <header>
+            <h1>DICOM読み込み</h1>
+        </header>
+        <div>
+            <!-- .jpg .png にも対応予定 -->
+            <input type="file" id="dcmFile" name="dcmFile" >
+        </div>
+        <div>
+            <canvas id="imgView">no image</canvas>
+        </div>
+    </body>
+    <script src="dcmTrimmer.js"></script>
+</html>
