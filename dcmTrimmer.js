@@ -7,8 +7,8 @@
 
 const fileReader = new FileReader();
 
-// let canvas = document.getElementById('imgView');
-// let ctx = canvas.getContext('2d');
+
+
 // canvas.width = 256;
 // canvas.height = 256;
 // let dst = ctx.createImageData(canvas.width , canvas.height);
@@ -39,32 +39,53 @@ function inputChange(){
     fileReader.addEventListener('load', function(e) {
         const dataViewer = new DataView(e.target.result);
         //以下は画像読み込みfuncでcapsulize
-        getScaledImage(dataViewer);
+        const imgInfo = getScaledImageData(dataViewer);
+        console.log(imgInfo);
         //canvasに画像表示
+        let canvas = document.getElementById('imgView');
+        let ctx = canvas.getContext('2d');
+        let img = setImage(ctx, imgInfo);
+        ctx.putImageData(img, 0, 0);
+
     })
 }
 
-function getScaledImage(dataView) {
-    let infoDict = new Map();
+function setImage(ctx, imgInfo) {
+    let imgData = ctx.createImageData(imgInfo.get("width"), imgInfo.get("height"));
+    const signalData = imgInfo.get("image");
+    let data = imgData.data;
+    for (let data_i = 0, signal_i=0; data_i < data.length, signal_i < signalData.length; data_i+=4, signal_i++){
+        data[data_i] = signalData[signal_i];    //red
+        data[data_i+1] = signalData[signal_i]   //green
+        data[data_i+2] = signalData[signal_i]   //blue
+        data[data_i+3] = 255                    //alpha
+    }
+    return imgData;
+}
+
+function getScaledImageData(dataView) {
+    let readDict = new Map();
     let imgTags = [
-        new Map([[0x0028, 0x0010]]),//Rows
-        new Map([[0x0028, 0x0011]]),//Columns
-        new Map([[0x0028, 0x1052]]),//Rescale Intercept
-        new Map([[0x0028, 0x1053]]),//Rescale Slope
+        new Map([[0x0028,0x0010]]),//Rows
+        new Map([[0x0028,0x0011]]),//Columns
+        new Map([[0x0028,0x1052]]),//Rescale Intercept
+        new Map([[0x0028,0x1053]]),//Rescale Slope
         new Map([[0x7FE0,0x0010]]), //Pixel Data
     ]
     const tagOffsetDict = getTagOffset(dataView, imgTags);
     //ここのアロー関数引数は(key, value)ではないことに注意
     tagOffsetDict.forEach((value, key) =>{
-        infoDict.set(key, tagDataReader(dataView, value))
+        readDict.set(key, tagDataReader(dataView, value))
     })
-    console.log(infoDict);
-    return imgMaker(infoDict);
+    const resultDict = new Map([
+        ["width", readDict.get("(0028,0010)")],
+        ["height", readDict.get("(0028,0011)")],
+        ["image", imgMaker(readDict)]]);
+    return resultDict
 }
 
-function imgMaker(imgInfoDict) {
-    const scaledArray = imgInfoDict.get("(7fe0, 0010)").map(v => v * Number(imgInfoDict.get("(0028, 1053)")) + Number(imgInfoDict.get("(0028, 1052)")));
-
+function imgMaker(readDict) {
+    return readDict.get("(7fe0,0010)").map(v => v * Number(readDict.get("(0028,1053)")) + Number(readDict.get("(0028,1052)")));
 }
 // const arr = [1,2,3,4,5,6,7,8,9];
     
@@ -81,7 +102,7 @@ function getTagOffset(dataView, tags) {
         if (tags.some(tag => tag.has(currentGroup))) {
             const currentElement = dataView.getUint16(offset+2, true);
             if(tags.some(tag => tag.get(currentGroup) === currentElement)){
-                const currentTag =`(${('0000' + currentGroup.toString(16)).slice(-4)}, ${('0000' + currentElement.toString(16)).slice(-4)})`
+                const currentTag =`(${('0000' + currentGroup.toString(16)).slice(-4)},${('0000' + currentElement.toString(16)).slice(-4)})`
                 resultDict.set(currentTag,offset+4);
             }
         }
@@ -112,6 +133,7 @@ function tagDataReader(dataView, offset) {
             //dataLengthBuffer(dLB)
             const dLB = getUint8Array(dataView, offset+4, 4);
             dataLength = dLB[3] * 10 ** 3 + dLB[2] * 10 ** 2 + dLB[1] * 10 + dLB[0];
+            console.log(dataLength);
             data = getUint8Array(dataView, offset+8, dataLength);
             return data;  
         default:
