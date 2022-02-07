@@ -50,6 +50,10 @@ function inputChange(){
     })
 }
 
+function normalizeToUint8(params) {
+    
+}
+
 function setImage(ctx, imgInfo) {
     let imgData = ctx.createImageData(imgInfo.get("width"), imgInfo.get("height"));
     const signalData = imgInfo.get("image");
@@ -117,32 +121,38 @@ function tagDataReader(dataView, offset) {
     //以下、データ型の追加がまだまだ必要。後々追加。
     switch (String.fromCharCode(VR[0])+String.fromCharCode(VR[1])) {
         case "DS":
-            dataLength = VR[3] * 10 + VR[2];
-            data = getUint8Array(dataView, offset + 4, dataLength);
+            dataLength = VR[3] * 256 + VR[2];
+            data = getUint8Array(dataView, offset + 4, dataLength);//ここもgetUint16Array?
             return data.map(v => String.fromCharCode(v)).join("");
         case "US":
-            dataLength = VR[3] * 10 + VR[2];
+            dataLength = VR[3] * 256 + VR[2];
             //データ型によってデータ中身の読み込み方法まで違う
             data = dataView.getUint16(offset+4, true);
             return data;
         case "LO":
-            dataLength = VR[3] * 10 + VR[2];
+            dataLength = VR[3] * 256 + VR[2];
             data = getUint8Array(dataView, offset + 4, dataLength);
             return data.map(v => String.fromCharCode(v)).join("");
         case "OW":
             //dataLengthBuffer(dLB)
             const dLB = getUint8Array(dataView, offset+4, 4);
-            dataLength = dLB[3] * 10 ** 3 + dLB[2] * 10 ** 2 + dLB[1] * 10 + dLB[0];
+            dataLength = dLB[3] * 256 ** 3 + dLB[2] * 256 ** 2 + dLB[1] * 256 + dLB[0];
             console.log(dataLength);
-            data = getUint8Array(dataView, offset+8, dataLength);
+            // data = getUint8Array(dataView, offset+8, dataLength);
+            data = getUint16Array(dataView, offset + 8, dataLength);
             return data;  
         default:
-            dataLength = VR[3] * 10 ** 3 + VR[2] * 10 ** 2 + VR[1] * 10 + VR[0];
+            dataLength = VR[3] * 256 ** 3 + VR[2] * 256 ** 2 + VR[1] * 256 + VR[0];
             data = getUint8Array(dataView, offset + 4, dataLength);
             return data;
     }
 }
 
-getUint8Array = (dataView, offset, length) => {
+function getUint8Array(dataView, offset, length){
     return Array.from(Array(length), (_v, k) => dataView.getUint8(offset+k, true))
 }
+//2byteずつ読むので配列の長さは半分になる
+function getUint16Array(dataView, offset, length){
+    return Array.from(Array(Math.floor(length/2)), (_v, k) => dataView.getUint16(offset+k*2, true))
+}
+
