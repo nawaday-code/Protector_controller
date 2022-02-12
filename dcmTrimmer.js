@@ -6,28 +6,6 @@
 // 第二引数をtrueにしてリトルエンディアンで読み込むこと
 
 const fileReader = new FileReader();
-
-
-
-// canvas.width = 256;
-// canvas.height = 256;
-// let dst = ctx.createImageData(canvas.width , canvas.height);
-// dst.data = [[1,2,3],[4,5,6],[7,8,9]];
-// for (var i = 0; i < canvas.height; i++) {
-//     for (var j = 0; j < canvas.width; j++) {
-         
-//          var pix = (i*canvas.width + j) * 4;     // i-j Coordinate
-
-//          dst.data[pix] = i;       // Red
-//          dst.data[pix+1] = 0;     // Green
-//          dst.data[pix+2] = 0;     // Blue
-//          dst.data[pix+3] = 255;   // Alpha
-//     }
-// }
-
-// ctx.putImageData(dst, 0, 0);
-
-
 const dcmFile = document.getElementById('dcmFile');
 dcmFile.addEventListener('change', inputChange);
 
@@ -38,33 +16,41 @@ function inputChange(){
     //↑のイベントの一部、ファイル読み込み後に発火するonload(もしくは'load')を使用。
     fileReader.addEventListener('load', function(e) {
         const dataViewer = new DataView(e.target.result);
-        //以下は画像読み込みfuncでcapsulize
         const imgInfo = getScaledImageData(dataViewer);
-        console.log(imgInfo);
         //canvasに画像表示
         let canvas = document.getElementById('imgView');
+        canvas.width = imgInfo.get("width");
+        canvas.height = imgInfo.get("height");
         let ctx = canvas.getContext('2d');
         let img = setImage(ctx, imgInfo);
         ctx.putImageData(img, 0, 0);
-
     })
+
+    //特定のTag情報を読み込み、画像データと紐づける処理
+    //トリミング処理
+    //複数のDICOMに対する処理
+    //出力処理
 }
 
-function normalizeToUint8(params) {
-    
-}
+
 
 function setImage(ctx, imgInfo) {
     let imgData = ctx.createImageData(imgInfo.get("width"), imgInfo.get("height"));
     const signalData = imgInfo.get("image");
     let data = imgData.data;
-    for (let data_i = 0, signal_i=0; data_i < data.length, signal_i < signalData.length; data_i+=4, signal_i++){
-        data[data_i] = signalData[signal_i];    //red
-        data[data_i+1] = signalData[signal_i]   //green
-        data[data_i+2] = signalData[signal_i]   //blue
-        data[data_i+3] = 255                    //alpha
+    //8bit階調までしか表現していないが、alphaをうまく使って16bit階調にできないか
+    for (let data_i = 0, signal_i=0; data_i < data.length, signal_i < signalData.length; data_i++, signal_i++){
+        data[4*data_i] = normalizeToUint8(signalData[signal_i]);    //red
+        data[4*data_i+1] = normalizeToUint8(signalData[signal_i]);   //green
+        data[4*data_i+2] = normalizeToUint8(signalData[signal_i]);  //blue
+        data[4*data_i+3] = 255                    //alpha
     }
     return imgData;
+}
+
+//あえてメッセージになるよう定義
+function normalizeToUint8(value_uint16) {
+    return (value_uint16*255)/4095;
 }
 
 function getScaledImageData(dataView) {
@@ -82,25 +68,21 @@ function getScaledImageData(dataView) {
         readDict.set(key, tagDataReader(dataView, value))
     })
     const resultDict = new Map([
-        ["width", readDict.get("(0028,0010)")],
-        ["height", readDict.get("(0028,0011)")],
-        ["image", imgMaker(readDict)]]);
+        ["height", readDict.get("(0028,0010)")],
+        ["width", readDict.get("(0028,0011)")],
+        ["image", imgMaker(readDict, true)]]);
     return resultDict
 }
 
-function imgMaker(readDict) {
-    return readDict.get("(7fe0,0010)").map(v => v * Number(readDict.get("(0028,1053)")) + Number(readDict.get("(0028,1052)")));
+function imgMaker(readDict, isInvert) {
+    const trueValue = readDict.get("(7fe0,0010)").map(v => v * Number(readDict.get("(0028,1053)")) + Number(readDict.get("(0028,1052)")));
+    return isInvert ? trueValue.map(v=>4095-v) : trueValue
 }
-// const arr = [1,2,3,4,5,6,7,8,9];
-    
-// const newArr = [];
-// while(arr.length) newArr.push(arr.splice(0,3));
-    
-// console.log(newArr);
 
 function getTagOffset(dataView, tags) {
     let resultDict = new Map();
-
+    //検索アルゴリズムを変えられればもっと処理が早くなる
+    //現段階では上から順に検索
     for (let offset = 0; offset < dataView.byteLength; offset+=2) {
         const currentGroup = dataView.getUint16(offset, true);
         if (tags.some(tag => tag.has(currentGroup))) {
@@ -137,8 +119,6 @@ function tagDataReader(dataView, offset) {
             //dataLengthBuffer(dLB)
             const dLB = getUint8Array(dataView, offset+4, 4);
             dataLength = dLB[3] * 256 ** 3 + dLB[2] * 256 ** 2 + dLB[1] * 256 + dLB[0];
-            console.log(dataLength);
-            // data = getUint8Array(dataView, offset+8, dataLength);
             data = getUint16Array(dataView, offset + 8, dataLength);
             return data;  
         default:
