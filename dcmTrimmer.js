@@ -30,7 +30,7 @@ function inputChange(){
         canvas.width = imgInfo.get("width");
         canvas.height = imgInfo.get("height");
         let ctx = canvas.getContext('2d');
-        let img = setImage(ctx, imgInfo);
+        let img = setImage(ctx, filter_Laplacian(imgInfo));
         ctx.putImageData(img, 0, 0);
     })
 
@@ -138,3 +138,70 @@ function getUint16Array(dataView, offset, length){
     return Array.from(Array(Math.floor(length/2)), (_v, k) => dataView.getUint16(offset+k*2, true))
 }
 
+
+//トリミング処理　以下は画像処理ライブラリとして分離させる予定
+
+function uniformArray(len, value) {
+    let arr = new Array(len); for (let i = 0; i < len; ++i) arr[i] = Array.isArray(value) ? [...value] : value;
+    return arr;
+}
+
+function conv2D(kernel, array2D) {
+    //分かりやすいようあえて定義
+    const kRows = kernel.length;
+    const kCols = kernel[0].length;
+    const rows = array2D.length;
+    const cols = array2D[0].length;
+    const kCenterX = Math.floor(kCols / 2);
+    const kCenterY = Math.floor(kRows / 2);
+    //要素がすべて０の2次元配列を生成
+    let result = uniformArray(rows, uniformArray(cols, 0));
+
+
+    for (let i = 0; i < rows; ++i) {          
+        for (let j = 0; j < cols; ++j) {          
+            for (let m = 0; m < kRows; ++m) {         
+                for (let n = 0; n < kCols; ++n) {        
+                    let ii = i + (m - kCenterY);
+                    let jj = j + (n - kCenterX);
+                    //array境界の外の計算は無視
+                    if (ii >= 0 && ii < rows && jj >= 0 && jj < cols) {
+                        result[i][j] += array2D[ii][jj] * kernel[m][n];
+                    };
+                };
+            };
+        };
+    };
+    return result;
+};
+
+function filter_Laplacian(imgInfo) {
+    const kernel = [
+        [1,1,1],
+        [1,-8,1],
+        [1,1,1]
+    ];
+    let imgArray2D = convertTo2D(imgInfo.get("image"), imgInfo.get("width"));
+    let filterd = conv2D(kernel, imgArray2D);
+    console.log("filter applied.");
+    //もうすこしいい感じに書きたい
+    return new Map([
+        ["height", imgInfo.get("height")],
+        ["width", imgInfo.get("width")],
+        ["image", filterd.flat()]
+    ]);
+}
+
+
+function convertTo2D(array1D, spliceWidth) {
+    const array2D = [];
+    while (array1D.length)
+        array2D.push(array1D.splice(0, spliceWidth));
+    return array2D;
+}
+// const arr = [1,2,3,4,5,6,7,8,9];
+
+// const newArr = [];
+// while(arr.length) newArr.push(arr.splice(0,3));
+
+// console.log(newArr);
