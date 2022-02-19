@@ -199,9 +199,5 @@ function convertTo2D(array1D, spliceWidth) {
         array2D.push(array1D.splice(0, spliceWidth));
     return array2D;
 }
-// const arr = [1,2,3,4,5,6,7,8,9];
 
-// const newArr = [];
-// while(arr.length) newArr.push(arr.splice(0,3));
-
-// console.log(newArr);
+//回転を考慮しない外接矩形を求める
