@@ -16,7 +16,7 @@ function inputChange(){
     //↑のイベントの一部、ファイル読み込み後に発火するonload(もしくは'load')を使用。
     fileReader.addEventListener('load', function(e) {
         const dataViewer = new DataView(e.target.result);
-        const imgInfo = getScaledImageData(dataViewer);
+        const imgInfo = getImageData(dataViewer, false, true);
         
         //ここはhtmlUI上で選択できるようにしたい
         let seekTag = [
@@ -26,11 +26,14 @@ function inputChange(){
         console.log(seekTagData.get("(0008,0080)"));
         console.log(seekTagData)
         //canvasに画像表示
+        //WWを調節する機能はまだ実装していないので、解像度が悪く見える
         let canvas = document.getElementById('imgView');
         canvas.width = imgInfo.get("width");
         canvas.height = imgInfo.get("height");
         let ctx = canvas.getContext('2d');
-        let img = setImage(ctx, filter_Laplacian(imgInfo));
+        let img = setImage(ctx, filter_Sobel(imgInfo, true));
+        // let img = setImage(ctx, imgInfo);
+
         ctx.putImageData(img, 0, 0);
     })
 
@@ -44,12 +47,11 @@ function inputChange(){
 function setImage(ctx, imgInfo) {
     let imgData = ctx.createImageData(imgInfo.get("width"), imgInfo.get("height"));
     const signalData = imgInfo.get("image");
-    let data = imgData.data;
-    for (let data_i = 0, signal_i=0; data_i < data.length, signal_i < signalData.length; data_i++, signal_i++){
-        data[4*data_i] = normalizeToUint8(signalData[signal_i]);    //red
-        data[4*data_i+1] = normalizeToUint8(signalData[signal_i]);   //green
-        data[4*data_i+2] = normalizeToUint8(signalData[signal_i]);  //blue
-        data[4*data_i+3] = 255                    //alpha
+    for (let data_i = 0, signal_i=0; data_i < imgData.data.length, signal_i < signalData.length; data_i++, signal_i++){
+        imgData.data[4*data_i] = normalizeToUint8(signalData[signal_i]);    //red
+        imgData.data[4*data_i+1] = normalizeToUint8(signalData[signal_i]);   //green
+        imgData.data[4*data_i+2] = normalizeToUint8(signalData[signal_i]);  //blue
+        imgData.data[4*data_i+3] = 255                    //alpha
     }
     return imgData;
 }
@@ -59,7 +61,7 @@ function normalizeToUint8(value_uint16) {
     return (value_uint16*255)/4095;
 }
 
-function getScaledImageData(dataView) {
+function getImageData(dataView, isInvert, isScaled) {
     // let readDict = new Map();
     let imgTags = [
         new Map([[0x0028,0x0010]]),//Rows
@@ -72,7 +74,7 @@ function getScaledImageData(dataView) {
     return new Map([
         ["height", readDict.get("(0028,0010)")],
         ["width", readDict.get("(0028,0011)")],
-        ["image", imgMaker(readDict, true)]]);
+        ["image", isScaled ? imgMaker(readDict, isInvert) : isInvert ? readDict.get("(7fe0,0010)").map(v => 4095 - v) : readDict.get("(7fe0,0010)")]]);
 }
 
 function imgMaker(readDict, isInvert) {
@@ -141,6 +143,10 @@ function getUint16Array(dataView, offset, length){
 
 //トリミング処理　以下は画像処理ライブラリとして分離させる予定
 
+function makeBinary(ctx, imgInfo) {
+    
+}
+
 function uniformArray(len, value) {
     let arr = new Array(len); for (let i = 0; i < len; ++i) arr[i] = Array.isArray(value) ? [...value] : value;
     return arr;
@@ -192,6 +198,29 @@ function filter_Laplacian(imgInfo) {
     ]);
 }
 
+function filter_Sobel(imgInfo, isVertical) {
+    const kernel = isVertical ? [
+        [1, 2, 1],
+        [0, 0, 0],
+        [-1, 2, -1]
+    ]:
+    [
+        [-1, 0, 1],
+        [-2, 0, 2],
+        [-1, 0, 1]
+    ];
+    let imgArray2D = convertTo2D(imgInfo.get("image"), imgInfo.get("width"));
+    let filterd = conv2D(kernel, imgArray2D);
+    console.log("filter applied.");
+    //もうすこしいい感じに書きたい
+    return new Map([
+        ["height", imgInfo.get("height")],
+        ["width", imgInfo.get("width")],
+        ["image", filterd.flat()]
+    ]);
+}
+
+
 
 function convertTo2D(array1D, spliceWidth) {
     const array2D = [];
@@ -200,4 +229,9 @@ function convertTo2D(array1D, spliceWidth) {
     return array2D;
 }
 
+
+//ウィンドウ幅調節
+//ガウシアンフィルタ
+//2値化
+//これが一番きれい
 //回転を考慮しない外接矩形を求める
