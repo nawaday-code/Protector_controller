@@ -235,3 +235,51 @@ function convertTo2D(array1D, spliceWidth) {
 //2値化
 //これが一番きれい
 //回転を考慮しない外接矩形を求める
+
+//DFT
+//複素数演算の用意
+const zero = () => [0, 0];
+const expi = t => [Math.cos(t), Math.sin(t)];
+const add = ([ax, ay], [bx, by]) => [ax + bx, ay + by];
+const sub = ([ax, ay], [bx, by]) => [ax - bx, ay - by];
+const mul = ([ax, ay], [bx, by]) => [ax*bx - ay*by, ax*by, + ay * bx];
+const divr = ([ax, ay], r) => [ax / r, ay / r];
+const abs = ([a, ib]) => [Math.sqrt(a ^ 2 + ib ^ 2)];
+
+
+const v1mul = (a1d, b) => a1d.map(a => mul(a, b));
+const v1add = (a1d, b1d) => a1d.map((a, i) => add(a, b1d[i])); 
+const v1sub = (a1d, b1d) => a1d.map((a, i) => sub(a, b1d[i])); 
+const v1sum = c1d => c1d.reduce(add, zero());
+//転置
+const transpose = c2d => c2d[0].map((_, j) => c2d.map((_, i) => c2d[i][j]));
+
+
+//funcを生成するファクトリー関数
+//アロー関数のふるまいに注意すれば混乱しないはず
+//2要素の配列が戻り値である点に注意
+//フーリエ変換とフーリエ逆変換を作成する
+const dft2DMaker = dft2Dfunc => [
+    c2d => dft2Dfunc(-2 * Math.PI, c2d),
+    F2d => {
+        const f2d = dft2Dfunc(2 * Math.PI, F2d);
+        return f2d.map(c1d => c1d.map(c => divr(c, f2d.length * c1d.length)));
+    },
+];
+
+const dft1DCore = (t, c1d) => c1d.map((_, index) => v1sum(
+    c1d.map((c, i) => mul(c, expi(t * index * i / c1d.length)))));
+
+//複素2次平面を転置して一行ずつフーリエ変換する
+const dft2DCore = (t, c2d) => transpose(
+    transpose(c2d.map(c1d => dft1DCore(t, c1d))).map(c1d => dft1DCore(t, c1d)));
+
+const [dft2D, idft2D] = dft2DMaker(dft2DCore);
+//高速フーリエ変換の実装は後々やる
+
+
+function* range(start, end) {
+    for (let i = start; i < end; i++) {
+        yield i;
+    }
+}
