@@ -24,15 +24,15 @@ function inputChange(){
         ];
         const seekTagData = getTagInfo(dataViewer, seekTag);
         console.log(seekTagData.get("(0008,0080)"));
-        console.log(seekTagData)
-        //canvasに画像表示
-        //WWを調節する機能はまだ実装していないので、解像度が悪く見える
+        console.log(seekTagData);
+
         let canvas = document.getElementById('imgView');
         canvas.width = imgInfo.get("width");
         canvas.height = imgInfo.get("height");
         let ctx = canvas.getContext('2d');
-        let img = setImage(ctx, filter_Sobel(imgInfo, true));
         // let img = setImage(ctx, imgInfo);
+        imgInfo.set("image", makeBinary(imgInfo.get("image"), -30));
+        let img = setImage(ctx, imgInfo);
 
         ctx.putImageData(img, 0, 0);
     })
@@ -42,24 +42,29 @@ function inputChange(){
     //出力処理
 }
 
-
+//トーンカーブ
+//rawデータはuint16(0~4095で12bitなのだが、byteで格納する都合により2byte=16bitで格納している)
+//ディスプレイ上ではuint8(0 ~ 255)階調でしか表示できない
+//そのため、ウィンドウ幅で調整して表示する部分を限定する
+//そこでトーンカーブをもちいて表現する
+//オートでウィンドウ調整したかったけどアイデアが思いつかなかった
+function applyToneCurve(array1D, min, max) {
+    let delta = 255 / (max - min)
+    return array1D.map(v => Math.floor(delta * (v - min)));
+}
 
 function setImage(ctx, imgInfo) {
     let imgData = ctx.createImageData(imgInfo.get("width"), imgInfo.get("height"));
-    const signalData = imgInfo.get("image");
-    for (let data_i = 0, signal_i=0; data_i < imgData.data.length, signal_i < signalData.length; data_i++, signal_i++){
-        imgData.data[4*data_i] = normalizeToUint8(signalData[signal_i]);    //red
-        imgData.data[4*data_i+1] = normalizeToUint8(signalData[signal_i]);   //green
-        imgData.data[4*data_i+2] = normalizeToUint8(signalData[signal_i]);  //blue
-        imgData.data[4*data_i+3] = 255                    //alpha
+    const displayData = applyToneCurve(imgInfo.get("image"), -120, 100);
+    for (let data_i = 0, display_i = 0; data_i < imgData.data.length, display_i < displayData.length; data_i++, display_i++) {
+        imgData.data[4 * data_i] = displayData[display_i];    //red
+        imgData.data[4 * data_i + 1] = displayData[display_i];   //green
+        imgData.data[4 * data_i + 2] = displayData[display_i];  //blue
+        imgData.data[4 * data_i + 3] = 255                    //alpha
     }
     return imgData;
 }
 
-//あえてメッセージになるよう定義
-function normalizeToUint8(value_uint16) {
-    return (value_uint16*255)/4095;
-}
 
 function getImageData(dataView, isInvert, isScaled) {
     // let readDict = new Map();
@@ -141,10 +146,23 @@ function getUint16Array(dataView, offset, length){
 }
 
 
-//トリミング処理　以下は画像処理ライブラリとして分離させる予定
+//以下は画像処理ライブラリとして分離させる予定
 
-function makeBinary(ctx, imgInfo) {
-    
+//階調処理
+//ヒストグラム
+function histgram(array1D) {
+    return array1D.reduce((prev, current) => {
+        prev[current] = prev[current] ? prev[current]+1 : 1
+        return prev
+    }, {});
+}
+
+
+
+
+
+function makeBinary(array1D, threshHold) {
+    return array1D.map(v =>v > threshHold ? 255 : 0);
 }
 
 function uniformArray(len, value) {
