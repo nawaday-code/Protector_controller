@@ -16,7 +16,7 @@ function inputChange(){
     //↑のイベントの一部、ファイル読み込み後に発火するonload(もしくは'load')を使用。
     fileReader.addEventListener('load', function(e) {
         const dataViewer = new DataView(e.target.result);
-        const imgInfo = getImageData(dataViewer, false, true);
+        const imgInfo = getImageData(dataViewer, true, true);
         
         //ここはhtmlUI上で選択できるようにしたい
         let seekTag = [
@@ -31,10 +31,11 @@ function inputChange(){
         canvas.height = imgInfo.get("height");
         let ctx = canvas.getContext('2d');
         // let img = setImage(ctx, imgInfo);
-        imgInfo.set("image", makeBinary(imgInfo.get("image"), -30));
+        // imgInfo.set("image", makeBinary(imgInfo.get("image"), 3515));
         let img = setImage(ctx, imgInfo);
 
         ctx.putImageData(img, 0, 0);
+        console.log("image is displayed.")
     })
 
     //トリミング処理
@@ -55,7 +56,11 @@ function applyToneCurve(array1D, min, max) {
 
 function setImage(ctx, imgInfo) {
     let imgData = ctx.createImageData(imgInfo.get("width"), imgInfo.get("height"));
-    const displayData = applyToneCurve(imgInfo.get("image"), -120, 100);
+    // const displayData = applyToneCurve(imgInfo.get("image"), -120, 100);
+    // const displayData = applyToneCurve(imgInfo.get("image"), 2000, 3500);
+    const displayData = applyToneCurve(imgInfo.get("image"), 0, 4095);
+
+
     for (let data_i = 0, display_i = 0; data_i < imgData.data.length, display_i < displayData.length; data_i++, display_i++) {
         imgData.data[4 * data_i] = displayData[display_i];    //red
         imgData.data[4 * data_i + 1] = displayData[display_i];   //green
@@ -156,10 +161,6 @@ function histgram(array1D) {
         return prev
     }, {});
 }
-
-
-
-
 
 function makeBinary(array1D, threshHold) {
     return array1D.map(v =>v > threshHold ? 255 : 0);
@@ -295,6 +296,21 @@ const dft2DCore = (t, c2d) => transpose(
 const [dft2D, idft2D] = dft2DMaker(dft2DCore);
 //高速フーリエ変換の実装は後々やる
 
+function gaussProfMaker(FWHM, pixelSpacingArray) {
+    const alpha = (4*Math.LN10(2))/(FWHM^2);
+    return pixelSpacingArray.map(v=>Math.sqrt(alpha/Math.PI)*Math.exp(-alpha*v^2)); 
+}
+
+function filter2DMaker(profArray1D, height) {
+    let copy1D = Array.from(Array(height), _=>profArray1D);
+    let filter2D = copy1D*transpose(copy1D);
+    return filter2D/total(filter2D);
+}
+
+
+function total() {
+    return NaN;
+}
 
 function* range(start, end) {
     for (let i = start; i < end; i++) {
