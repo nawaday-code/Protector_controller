@@ -16,26 +16,38 @@ function inputChange(){
     //↑のイベントの一部、ファイル読み込み後に発火するonload(もしくは'load')を使用。
     fileReader.addEventListener('load', function(e) {
         const dataViewer = new DataView(e.target.result);
-        const imgInfo = getImageData(dataViewer, true, true);
-        
+        const imgInfo = getImageData(dataViewer, false, isScaled=true);
+
+        //画像処理部分。後々スクリプト分ける。
+        const pixSpacingArr = Array.from(Array(imgInfo.get("width")), (_, i)=> {
+            const tagDict = getTagInfo(dataViewer, [new Map([[0x0028, 0x0030]])]);
+            return i * tagDict.get("(0028,0030)")[0];
+        })
+
         //ここはhtmlUI上で選択できるようにしたい
         let seekTag = [
-            new Map([[0x0008, 0x0080]])
+            new Map([[0x0008, 0x103E]]),
+            new Map([[0x0028, 0x0030]])
         ];
         const seekTagData = getTagInfo(dataViewer, seekTag);
-        console.log(seekTagData.get("(0008,0080)"));
         console.log(seekTagData);
+        console.log(seekTagData.get("(0028,0030)"));
+        console.log(seekTagData.get("(0028,0030)")[0]);
+
 
         let canvas = document.getElementById('imgView');
         canvas.width = imgInfo.get("width");
         canvas.height = imgInfo.get("height");
         let ctx = canvas.getContext('2d');
-        // let img = setImage(ctx, imgInfo);
-        // imgInfo.set("image", makeBinary(imgInfo.get("image"), 3515));
         let img = setImage(ctx, imgInfo);
+        // imgInfo.set("image", makeBinary(imgInfo.get("image"), 3515));
+        let gaussed = gaussianFilter(imgInfo, 2);
+        // let img = setImage(ctx, );
 
         ctx.putImageData(img, 0, 0);
-        console.log("image is displayed.")
+        console.log(imgInfo.get('width'));
+        console.log(imgInfo.get('height'));
+
     })
 
     //トリミング処理
@@ -56,9 +68,9 @@ function applyToneCurve(array1D, min, max) {
 
 function setImage(ctx, imgInfo) {
     let imgData = ctx.createImageData(imgInfo.get("width"), imgInfo.get("height"));
-    // const displayData = applyToneCurve(imgInfo.get("image"), -120, 100);
+    const displayData = applyToneCurve(imgInfo.get("image"), -120, 100);
     // const displayData = applyToneCurve(imgInfo.get("image"), 2000, 3500);
-    const displayData = applyToneCurve(imgInfo.get("image"), 0, 4095);
+    // const displayData = applyToneCurve(imgInfo.get("image"), 0, 4095);
 
 
     for (let data_i = 0, display_i = 0; data_i < imgData.data.length, display_i < displayData.length; data_i++, display_i++) {
@@ -72,18 +84,19 @@ function setImage(ctx, imgInfo) {
 
 
 function getImageData(dataView, isInvert, isScaled) {
-    // let readDict = new Map();
     let imgTags = [
         new Map([[0x0028,0x0010]]),//Rows
         new Map([[0x0028,0x0011]]),//Columns
+        new Map([[0x0028,0x0030]]),//Pixel Spacing
         new Map([[0x0028,0x1052]]),//Rescale Intercept
         new Map([[0x0028,0x1053]]),//Rescale Slope
-        new Map([[0x7FE0,0x0010]]), //Pixel Data
+        new Map([[0x7FE0,0x0010]]),//Pixel Data
     ]
     const readDict = getTagInfo(dataView, imgTags);
     return new Map([
         ["height", readDict.get("(0028,0010)")],
         ["width", readDict.get("(0028,0011)")],
+        ["pixelSpacing", readDict.get("(0028,0030)")],
         ["image", isScaled ? imgMaker(readDict, isInvert) : isInvert ? readDict.get("(7fe0,0010)").map(v => 4095 - v) : readDict.get("(7fe0,0010)")]]);
 }
 
@@ -143,11 +156,11 @@ function tagDataReader(dataView, offset) {
 }
 
 function getUint8Array(dataView, offset, length){
-    return Array.from(Array(length), (_v, k) => dataView.getUint8(offset+k, true))
+    return Array.from(Array(length), (_v, k)=> dataView.getUint8(offset+k, true));
 }
 //2byteずつ読むので配列の長さは半分になる
 function getUint16Array(dataView, offset, length){
-    return Array.from(Array(Math.floor(length/2)), (_v, k) => dataView.getUint16(offset+k*2, true))
+    return Array.from(Array(Math.floor(length/2)), (_v, k) => dataView.getUint16(offset+k*2, true));
 }
 
 
@@ -286,34 +299,68 @@ const dft2DMaker = dft2Dfunc => [
     },
 ];
 
-const dft1DCore = (t, c1d) => c1d.map((_, index) => v1sum(
-    c1d.map((c, i) => mul(c, expi(t * index * i / c1d.length)))));
+const dft1DCore = (constValue, c1d) => c1d.map((_, index) => v1sum(
+    c1d.map((c, i) => mul(c, expi(constValue * index * i / c1d.length)))));
 
 //複素2次平面を転置して一行ずつフーリエ変換する
-const dft2DCore = (t, c2d) => transpose(
-    transpose(c2d.map(c1d => dft1DCore(t, c1d))).map(c1d => dft1DCore(t, c1d)));
+const dft2DCore = (constValue, c2d) => transpose(
+    transpose(c2d.map(c1d => dft1DCore(constValue, c1d))).map(c1d => dft1DCore(constValue, c1d)));
 
 const [dft2D, idft2D] = dft2DMaker(dft2DCore);
 //高速フーリエ変換の実装は後々やる
 
 function gaussProfMaker(FWHM, pixelSpacingArray) {
-    const alpha = (4*Math.LN10(2))/(FWHM^2);
-    return pixelSpacingArray.map(v=>Math.sqrt(alpha/Math.PI)*Math.exp(-alpha*v^2)); 
+    const alpha = (4*Math.log10(2))/(FWHM**2);
+    return normalize(pixelSpacingArray.map(v=>Math.sqrt(alpha/Math.PI)*Math.exp(-alpha*v**2))); 
 }
 
 function filter2DMaker(profArray1D, height) {
-    let copy1D = Array.from(Array(height), _=>profArray1D);
-    let filter2D = copy1D*transpose(copy1D);
-    return filter2D/total(filter2D);
+    let duplicate = Array.from(Array(height), _=>profArray1D);
+    //行列の掛け算の実装
+    let filter2D = multiple2D(duplicate, transpose(duplicate));
+    return convertTo2D(normalize(filter2D.flat()), profArray1D.length);
 }
 
-
-function total() {
-    return NaN;
+function normalize(array1D) {
+    return array1D.reduce((maxV, v)=>Math.max(maxV, v), -Infinity);
 }
 
-function* range(start, end) {
-    for (let i = start; i < end; i++) {
-        yield i;
+function gaussianFilter(imgInfo, FWHM) {
+    //pixelSpacingArrayの作成
+    // profileMtx = (float(x)*pixelSize for x in range(-int(mtx/2), int(mtx/2)))
+    //heightとwidthで大きいほうを選択
+    const arrayLength = imgInfo.get('width') > imgInfo.get('height') ? imgInfo.get('width'):imgInfo.get('height');
+    const pixelSpacingArray = Array.from(Array(arrayLength), (_, k)=>k*imgInfo.get('pixelSpacing')[0]);
+    //gaussianFilterの作成
+    const filter = filter2DMaker(gaussProfMaker(FWHM, pixelSpacingArray), arrayLength);
+    console.log(filter);
+    //DFTしてフィルターの適応
+    //2次元複素データの用意
+    const complex2D = convertTo2D(imgInfo.get('image').map((v)=>[v,0]), imgInfo.get('width'));
+    // console.log(dft2D(complex2D));
+    let dftFilterd = multiple2D(dft2D(complex2D), filter);
+    return idft2D(dftFilterd); 
+}
+
+function multiple2D(a2D, b2D) {
+    const rows = a2D.length, columns = a2D[0].length;
+
+    let result2D = Array.from(Array(rows), _=>Array.from(Array(columns), _=>0));
+
+    for (let i = 0; i < rows; i++) {
+        for (let j = 0 ; j < columns; j++) {
+            result2D[i][j] = a2D[i][j] * b2D[i][j];
+        }
     }
+    return result2D;
 }
+
+// function total2D(array2D) {
+//     return array2D.reduce((sum, prof)=>sum+= prof.reduce((profSum, v)=>profSum += v, 0), 0);
+// }
+
+function total2D(array2D) {
+    return array2D.flat().reduce((sum, v)=>sum += v, 0);
+}
+
+function* range(start, end) {while (start <= end) {yield start++}}
