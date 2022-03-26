@@ -12,8 +12,7 @@ dcmFile.addEventListener('change', inputChange);
 function inputChange(){
     const files = dcmFile.files;
     //バッファを確保、その後2バイトでtag読み、あとは変調してバイト読み込み
-    fileReader.readAsArrayBuffer(files[0]);//ここの反応によっていろんなイベントが発生する
-    //↑のイベントの一部、ファイル読み込み後に発火するonload(もしくは'load')を使用。
+    fileReader.readAsArrayBuffer(files[0]);
     fileReader.addEventListener('load', function(e) {
         const dataViewer = new DataView(e.target.result);
         const imgInfo = getImageData(dataViewer, false, isScaled=true);
