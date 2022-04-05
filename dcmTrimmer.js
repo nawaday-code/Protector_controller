@@ -348,11 +348,18 @@ function multiple2D(a2D, b2D) {
 
     let result2D = Array.from(Array(rows), _=>Array.from(Array(columns), _=>0));
 
+    a2D.map((a2Dv,i)=>{
+        b2D.map((b2Dv, j)=>
+            {a2Dv[i]*b2Dv[j]}
+    });
+    //ここの処理が重すぎる。mapかasyncでできないか
     for (let i = 0; i < rows; i++) {
         for (let j = 0 ; j < columns; j++) {
             result2D[i][j] = a2D[i][j] * b2D[i][j];
         }
     }
+
+
     return result2D;
 }
 
@@ -361,3 +368,21 @@ function total2D(array2D) {
 }
 
 function* range(start, end) {while (start <= end) {yield start++}}
+
+//実部と虚部を分けるmethod
+function separateFromComplex(complex2D){
+    const complex2D = a2D.length, columns = complex2D[0].length;
+    let real2D = Array.from(Array(rows), _=>Array.from(Array(columns), _=>0));
+    let imag2D = Array.from(Array(rows), _=>Array.from(Array(columns), _=>0));
+
+    for (let i = 0; i < rows; i++) {
+        for (let j = 0 ; j < columns; j++) {
+            real2D[i][j] = complex2D[i][j][0]
+            imag2D[i][j] = complex2D[i][j][1]
+        }
+    }
+    return [real2D, imag2D]
+}
+function mergeToComplex(real2D, Imag2D) {
+    
+}
