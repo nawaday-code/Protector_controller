@@ -316,7 +316,8 @@ function gaussProfMaker(pixelSpacingArray, FWHM) {
 function filter2DMaker(profArray1D, height) {
     let duplicate = Array.from(Array(height), _=>profArray1D);
     //行列の掛け算の実装
-    let filter2D = multiple2D(duplicate, transpose(duplicate));
+    let filter2D
+    multiple2D(duplicate, transpose(duplicate)).then(v=>filter2D=v);
     return convertTo2D(normalize(filter2D.flat()), profArray1D.length);
 }
 
@@ -349,7 +350,7 @@ function gaussianFilter(imgInfo, FWHM) {
     console.log(dftFilterd);
     // console.log(dftFilterd.flat().map(v=>Math.abs(v)));
     // imgInfo.set("image", idft2D(dftFilterd).flat().map(v => Math.abs(v)));
-    return imgInfo;
+    // return imgInfo;
 }
 
 async function asyncMulti(a, b) {
