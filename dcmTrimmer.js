@@ -5,6 +5,8 @@
 // javascriptで読み込む際はgetInt16(_, true)
 // 第二引数をtrueにしてリトルエンディアンで読み込むこと
 
+//実はmapは処理速度が遅いみたい。forかfor of, またはreduceを使って書き換え
+
 const fileReader = new FileReader();
 const dcmFile = document.getElementById('dcmFile');
 dcmFile.addEventListener('change', inputChange);
@@ -336,29 +338,36 @@ function gaussianFilter(imgInfo, FWHM) {
     //2次元複素データの用意
     const complex2D = convertTo2D(imgInfo.get('image').map((v)=>[v,0]), imgInfo.get('width'));
     //DFTしてフィルターの適応
-    console.log(dft2D(complex2D).flat().map(v=> abs(v)).flat());
-    let dftFilterd = multiple2D(dft2D(complex2D), filter);
+    // console.log(dft2D(complex2D).flat().map(v=> abs(v)).flat());
+    //分割代入
+    // let dftRe, dftIm
+    let [dftRe, dftIm]= separateFromComplex(dft2D(complex2D));
+    const promiseRe = multiple2D(dftRe, filter)
+    const promiseIm = multiple2D(dftIm, filter)
+    let dftFilterd
+    Promise.all(promiseRe, promiseIm).then(result => dftFilterd = mergeToComplex(result))
+    console.log(dftFilterd);
     // console.log(dftFilterd.flat().map(v=>Math.abs(v)));
-    imgInfo.set("image", idft2D(dftFilterd).flat().map(v => Math.abs(v)));
+    // imgInfo.set("image", idft2D(dftFilterd).flat().map(v => Math.abs(v)));
     return imgInfo;
 }
 
-function multiple2D(a2D, b2D) {
+async function asyncMulti(a, b) {
+    return a*b;
+}
+
+async function multiple2D(a2D, b2D) {
     const rows = a2D.length, columns = a2D[0].length;
 
     let result2D = Array.from(Array(rows), _=>Array.from(Array(columns), _=>0));
-
-    a2D.map((a2Dv,i)=>{
-        b2D.map((b2Dv, j)=>
-            {a2Dv[i]*b2Dv[j]}
-    });
-    //ここの処理が重すぎる。mapかasyncでできないか
+    //promise all 使ってみたい
+    //非同期反復処理
     for (let i = 0; i < rows; i++) {
         for (let j = 0 ; j < columns; j++) {
-            result2D[i][j] = a2D[i][j] * b2D[i][j];
+            asyncMulti(a2D[i][j], b2D[i][j]).then(v=>result2D[i][j]=v);
         }
     }
-
+    await Promise.all(result2D);
 
     return result2D;
 }
@@ -369,9 +378,10 @@ function total2D(array2D) {
 
 function* range(start, end) {while (start <= end) {yield start++}}
 
+
 //実部と虚部を分けるmethod
 function separateFromComplex(complex2D){
-    const complex2D = a2D.length, columns = complex2D[0].length;
+    const rows = complex2D.length, columns = complex2D[0].length;
     let real2D = Array.from(Array(rows), _=>Array.from(Array(columns), _=>0));
     let imag2D = Array.from(Array(rows), _=>Array.from(Array(columns), _=>0));
 
@@ -381,8 +391,17 @@ function separateFromComplex(complex2D){
             imag2D[i][j] = complex2D[i][j][1]
         }
     }
-    return [real2D, imag2D]
+    return [real2D, imag2D];
 }
-function mergeToComplex(real2D, Imag2D) {
+function mergeToComplex(real2D, imag2D) {
+    const rows = real2D.length, columns = real2D[0].length;
+    let complex2D = Array.from(Array(rows), _=>Array.from(Array(columns), _=>[0,0]));
     
+    for (let i = 0; i < rows; i++) {
+        for (let j = 0 ; j < columns; j++) {
+            complex2D[i][j][0] = real2D[i][j];
+            complex2D[i][j][1] = imag2D[i][j];
+        }
+    }
+    return complex2D;
 }
