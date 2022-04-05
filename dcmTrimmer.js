@@ -29,8 +29,6 @@ function inputChange(){
             new Map([[0x0028, 0x0030]])
         ];
         const seekTagData = getTagInfo(dataViewer, seekTag);
-        console.log(seekTagData);
-        console.log(seekTagData.get("(0028,0030)"));
         console.log(seekTagData.get("(0028,0030)")[0]);
 
 
@@ -38,10 +36,10 @@ function inputChange(){
         canvas.width = imgInfo.get("width");
         canvas.height = imgInfo.get("height");
         let ctx = canvas.getContext('2d');
-        let img = setImage(ctx, imgInfo);
+        // let img = setImage(ctx, imgInfo);
         // imgInfo.set("image", makeBinary(imgInfo.get("image"), 3515));
-        let gaussed = gaussianFilter(imgInfo, 2);
-        // let img = setImage(ctx, );
+        let imgInfo_gaussed = gaussianFilter(imgInfo, FWHM=2);
+        let img = setImage(ctx, imgInfo_gaussed);
 
         ctx.putImageData(img, 0, 0);
         console.log(imgInfo.get('width'));
@@ -308,7 +306,7 @@ const dft2DCore = (constValue, c2d) => transpose(
 const [dft2D, idft2D] = dft2DMaker(dft2DCore);
 //高速フーリエ変換の実装は後々やる
 
-function gaussProfMaker(FWHM, pixelSpacingArray) {
+function gaussProfMaker(pixelSpacingArray, FWHM) {
     const alpha = (4*Math.log10(2))/(FWHM**2);
     return normalize(pixelSpacingArray.map(v=>Math.sqrt(alpha/Math.PI)*Math.exp(-alpha*v**2))); 
 }
@@ -321,7 +319,8 @@ function filter2DMaker(profArray1D, height) {
 }
 
 function normalize(array1D) {
-    return array1D.reduce((maxV, v)=>Math.max(maxV, v), -Infinity);
+    const maxV = array1D.reduce((maxV, v)=>Math.max(maxV, v), -Infinity);
+    return array1D.map(v => v/maxV);
 }
 
 function gaussianFilter(imgInfo, FWHM) {
@@ -329,16 +328,19 @@ function gaussianFilter(imgInfo, FWHM) {
     // profileMtx = (float(x)*pixelSize for x in range(-int(mtx/2), int(mtx/2)))
     //heightとwidthで大きいほうを選択
     const arrayLength = imgInfo.get('width') > imgInfo.get('height') ? imgInfo.get('width'):imgInfo.get('height');
-    const pixelSpacingArray = Array.from(Array(arrayLength), (_, k)=>k*imgInfo.get('pixelSpacing')[0]);
+    const halfLength = Math.floor(arrayLength/2);
+    // const pixelSpacingArray = Array.from(Array(arrayLength), (_, k)=>k*imgInfo.get('pixelSpacing')[0]);
+    const pixelSpacingArray = Array.from(range(-halfLength, halfLength), v=> v*(imgInfo.get('pixelSpacing')[0]));
     //gaussianFilterの作成
-    const filter = filter2DMaker(gaussProfMaker(FWHM, pixelSpacingArray), arrayLength);
-    console.log(filter);
-    //DFTしてフィルターの適応
+    const filter = filter2DMaker(gaussProfMaker(pixelSpacingArray, FWHM), arrayLength);
     //2次元複素データの用意
     const complex2D = convertTo2D(imgInfo.get('image').map((v)=>[v,0]), imgInfo.get('width'));
-    // console.log(dft2D(complex2D));
+    //DFTしてフィルターの適応
+    console.log(dft2D(complex2D).flat().map(v=> abs(v)).flat());
     let dftFilterd = multiple2D(dft2D(complex2D), filter);
-    return idft2D(dftFilterd); 
+    // console.log(dftFilterd.flat().map(v=>Math.abs(v)));
+    imgInfo.set("image", idft2D(dftFilterd).flat().map(v => Math.abs(v)));
+    return imgInfo;
 }
 
 function multiple2D(a2D, b2D) {
@@ -353,10 +355,6 @@ function multiple2D(a2D, b2D) {
     }
     return result2D;
 }
-
-// function total2D(array2D) {
-//     return array2D.reduce((sum, prof)=>sum+= prof.reduce((profSum, v)=>profSum += v, 0), 0);
-// }
 
 function total2D(array2D) {
     return array2D.flat().reduce((sum, v)=>sum += v, 0);
