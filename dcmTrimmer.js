@@ -19,19 +19,16 @@ function inputChange(){
         const dataViewer = new DataView(e.target.result);
         const imgInfo = getImageData(dataViewer, false, isScaled=true);
 
-        //画像処理部分。後々スクリプト分ける。
-        const pixSpacingArr = Array.from(Array(imgInfo.get("width")), (_, i)=> {
-            const tagDict = getTagInfo(dataViewer, [new Map([[0x0028, 0x0030]])]);
-            return i * tagDict.get("(0028,0030)")[0];
-        })
-
         //ここはhtmlUI上で選択できるようにしたい
         let seekTag = [
             new Map([[0x0008, 0x103E]]),
             new Map([[0x0028, 0x0030]])
         ];
         const seekTagData = getTagInfo(dataViewer, seekTag);
-        console.log(seekTagData.get("(0028,0030)")[0]);
+
+        //画像処理部分。後々スクリプト分ける。
+        //以下非同期処理で
+
 
 
         let canvas = document.getElementById('imgView');
@@ -40,12 +37,10 @@ function inputChange(){
         let ctx = canvas.getContext('2d');
         // let img = setImage(ctx, imgInfo);
         // imgInfo.set("image", makeBinary(imgInfo.get("image"), 3515));
-        let imgInfo_gaussed = gaussianFilter(imgInfo, FWHM=2);
-        let img = setImage(ctx, imgInfo_gaussed);
+        gaussianFilter(imgInfo, FWHM=2).then(v=>console.log(v));
+        // let img = setImage(ctx, imgInfo_gaussed);
 
-        ctx.putImageData(img, 0, 0);
-        console.log(imgInfo.get('width'));
-        console.log(imgInfo.get('height'));
+        // ctx.putImageData(img, 0, 0);
 
     })
 
@@ -218,7 +213,7 @@ function filter_Laplacian(imgInfo) {
         [1,-8,1],
         [1,1,1]
     ];
-    let imgArray2D = convertTo2D(imgInfo.get("image"), imgInfo.get("width"));
+    let imgArray2D = convertTo2D(imgInfo.get("image"), [imgInfo.get('height'), imgInfo.get('width')]);
     let filterd = conv2D(kernel, imgArray2D);
     console.log("filter applied.");
     //もうすこしいい感じに書きたい
@@ -240,7 +235,7 @@ function filter_Sobel(imgInfo, isVertical) {
         [-2, 0, 2],
         [-1, 0, 1]
     ];
-    let imgArray2D = convertTo2D(imgInfo.get("image"), imgInfo.get("width"));
+    let imgArray2D = convertTo2D(imgInfo.get("image"),[imgInfo.get('height'), imgInfo.get('width')]);
     let filterd = conv2D(kernel, imgArray2D);
     console.log("filter applied.");
     //もうすこしいい感じに書きたい
@@ -252,13 +247,8 @@ function filter_Sobel(imgInfo, isVertical) {
 }
 
 
+//shape = [*, *]
 
-function convertTo2D(array1D, spliceWidth) {
-    const array2D = [];
-    while (array1D.length)
-        array2D.push(array1D.splice(0, spliceWidth));
-    return array2D;
-}
 
 
 //ウィンドウ幅調節
@@ -283,8 +273,7 @@ const v1add = (a1d, b1d) => a1d.map((a, i) => add(a, b1d[i]));
 const v1sub = (a1d, b1d) => a1d.map((a, i) => sub(a, b1d[i])); 
 const v1sum = c1d => c1d.reduce(add, zero());
 //転置
-const transpose = c2d => c2d[0].map((_, j) => c2d.map((_, i) => c2d[i][j]));
-
+const transpose = a => a[0].map((_, c) => a.map(r => r[c]));
 
 //funcを生成するファクトリー関数
 //アロー関数のふるまいに注意すれば混乱しないはず
@@ -313,12 +302,25 @@ function gaussProfMaker(pixelSpacingArray, FWHM) {
     return normalize(pixelSpacingArray.map(v=>Math.sqrt(alpha/Math.PI)*Math.exp(-alpha*v**2))); 
 }
 
-function filter2DMaker(profArray1D, height) {
-    let duplicate = Array.from(Array(height), _=>profArray1D);
-    //行列の掛け算の実装
-    let filter2D
-    multiple2D(duplicate, transpose(duplicate)).then(v=>filter2D=v);
-    return convertTo2D(normalize(filter2D.flat()), profArray1D.length);
+// async function filter2DMaker(profArray1D, height) {
+//     let duplicate = Array.from(Array(height), _=>profArray1D);
+//     //行列の掛け算の実装
+//     let filter2D = await multiple2D(duplicate, transpose(duplicate))
+//     console.log(filter2D);
+//     return convertTo2D(normalize(filter2D.flat()), profArray1D.length);
+// }
+
+// async function filter2DMaker(profArray1D, columns) {
+//     let duplicate = Array.from(Array(columns), _=>profArray1D);
+//     const shape = [columns, profArray1D.length]
+//     let filter2D = await multiple2D(duplicate, transpose(duplicate));
+//     return convertTo2D(normalize(filter2D.flat()), shape);
+// }
+
+async function filterMaker(profArray1D, columns) {
+    let duplicate = Array.from(Array(columns), _=>profArray1D);
+    let filter2D = await multiple2D(duplicate, transpose(duplicate));
+    return normalize(filter2D.flat());
 }
 
 function normalize(array1D) {
@@ -326,27 +328,51 @@ function normalize(array1D) {
     return array1D.map(v => v/maxV);
 }
 
-function gaussianFilter(imgInfo, FWHM) {
+async function convertTo2D(array1D, shape) {
+    try{
+        let array2D = [], arraytmp = array1D.slice(0, array1D.length);
+        if (shape[0]*shape[1] != array1D.length) {
+            throw new Error('1次元配列に対して2次元配列変換後の行と列の数が不正です。');
+        }
+        while (arraytmp.length)
+            array2D.push(arraytmp.splice(0, shape[1]));
+        return array2D;
+
+    }catch(e){
+        console.error("エラー:", e.message);
+    }
+
+}
+
+async function gaussianFilter(imgInfo, FWHM) {
     //pixelSpacingArrayの作成
     // profileMtx = (float(x)*pixelSize for x in range(-int(mtx/2), int(mtx/2)))
     //heightとwidthで大きいほうを選択
     const arrayLength = imgInfo.get('width') > imgInfo.get('height') ? imgInfo.get('width'):imgInfo.get('height');
     const halfLength = Math.floor(arrayLength/2);
     // const pixelSpacingArray = Array.from(Array(arrayLength), (_, k)=>k*imgInfo.get('pixelSpacing')[0]);
-    const pixelSpacingArray = Array.from(range(-halfLength, halfLength), v=> v*(imgInfo.get('pixelSpacing')[0]));
+    const pixelSpacingArray = Array.from(range(-halfLength+1, halfLength), v=> v*(imgInfo.get('pixelSpacing')[0]));
+    // const testarray = Array.from(range(-halfLength, halfLength), v=> v);
+    // console.log(testarray);
     //gaussianFilterの作成
-    const filter = filter2DMaker(gaussProfMaker(pixelSpacingArray, FWHM), arrayLength);
+    let filter = await filterMaker(gaussProfMaker(pixelSpacingArray, FWHM), arrayLength);
+    console.log(filter.length);
+    console.log(arrayLength);
+    console.log(pixelSpacingArray.length);
     //2次元複素データの用意
-    const complex2D = convertTo2D(imgInfo.get('image').map((v)=>[v,0]), imgInfo.get('width'));
+    const complex2D =  convertTo2D(imgInfo.get('image').map((v)=>[v,0]), [imgInfo.get('height'), imgInfo.get('width')]);
+    const complexfilter = convertTo2D(filter.map((v)=>[v,0]), [arrayLength, arrayLength]);
+    await Promise.all(complex2D, complexfilter);
     //DFTしてフィルターの適応
     // console.log(dft2D(complex2D).flat().map(v=> abs(v)).flat());
     //分割代入
     // let dftRe, dftIm
     let [dftRe, dftIm]= separateFromComplex(dft2D(complex2D));
-    const promiseRe = multiple2D(dftRe, filter)
-    const promiseIm = multiple2D(dftIm, filter)
-    let dftFilterd
-    Promise.all(promiseRe, promiseIm).then(result => dftFilterd = mergeToComplex(result))
+    let [dftFilterRe, _dftFilterIm] = separateFromComplex(dft2D(complexfilter));
+    await Promise.all([dftRe, dftIm], [dftFilterRe, _dftFilterIm]);
+    const promiseRe = multiple2D(dftRe, dftFilterRe);
+    const promiseIm = multiple2D(dftIm, dftFilterRe);
+    let dftFilterd = mergeToComplex(await Promise.all(promiseRe, promiseIm));
     console.log(dftFilterd);
     // console.log(dftFilterd.flat().map(v=>Math.abs(v)));
     // imgInfo.set("image", idft2D(dftFilterd).flat().map(v => Math.abs(v)));
@@ -361,16 +387,14 @@ async function multiple2D(a2D, b2D) {
     const rows = a2D.length, columns = a2D[0].length;
 
     let result2D = Array.from(Array(rows), _=>Array.from(Array(columns), _=>0));
-    //promise all 使ってみたい
     //非同期反復処理
     for (let i = 0; i < rows; i++) {
         for (let j = 0 ; j < columns; j++) {
             asyncMulti(a2D[i][j], b2D[i][j]).then(v=>result2D[i][j]=v);
         }
     }
-    await Promise.all(result2D);
 
-    return result2D;
+    return await Promise.all(result2D);
 }
 
 function total2D(array2D) {
@@ -381,7 +405,7 @@ function* range(start, end) {while (start <= end) {yield start++}}
 
 
 //実部と虚部を分けるmethod
-function separateFromComplex(complex2D){
+async function separateFromComplex(complex2D){
     const rows = complex2D.length, columns = complex2D[0].length;
     let real2D = Array.from(Array(rows), _=>Array.from(Array(columns), _=>0));
     let imag2D = Array.from(Array(rows), _=>Array.from(Array(columns), _=>0));
