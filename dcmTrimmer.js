@@ -31,10 +31,10 @@ function inputChange(){
 
 
 
-        let canvas = document.getElementById('imgView');
-        canvas.width = imgInfo.get("width");
-        canvas.height = imgInfo.get("height");
-        let ctx = canvas.getContext('2d');
+        // let canvas = document.getElementById('imgView');
+        // canvas.width = imgInfo.get("width");
+        // canvas.height = imgInfo.get("height");
+        // let ctx = canvas.getContext('2d');
         // let img = setImage(ctx, imgInfo);
         // imgInfo.set("image", makeBinary(imgInfo.get("image"), 3515));
         gaussianFilter(imgInfo, FWHM=2).then(v=>console.log(v));
@@ -345,34 +345,44 @@ async function convertTo2D(array1D, shape) {
 }
 
 async function gaussianFilter(imgInfo, FWHM) {
+    const image = imgInfo.get('image'), width = imgInfo.get('width'), height = imgInfo.get('height'), pixelSpacing = imgInfo.get('pixelSpacing')[0];
     //pixelSpacingArrayの作成
     // profileMtx = (float(x)*pixelSize for x in range(-int(mtx/2), int(mtx/2)))
     //heightとwidthで大きいほうを選択
-    const arrayLength = imgInfo.get('width') > imgInfo.get('height') ? imgInfo.get('width'):imgInfo.get('height');
+    const arrayLength = width > height ? width : height;
     const halfLength = Math.floor(arrayLength/2);
     // const pixelSpacingArray = Array.from(Array(arrayLength), (_, k)=>k*imgInfo.get('pixelSpacing')[0]);
-    const pixelSpacingArray = Array.from(range(-halfLength+1, halfLength), v=> v*(imgInfo.get('pixelSpacing')[0]));
+    const pixelSpacingArray = Array.from(range(-halfLength + 1, halfLength), v => v * pixelSpacing);
     // const testarray = Array.from(range(-halfLength, halfLength), v=> v);
     // console.log(testarray);
     //gaussianFilterの作成
     let filter = await filterMaker(gaussProfMaker(pixelSpacingArray, FWHM), arrayLength);
-    console.log(filter.length);
-    console.log(arrayLength);
-    console.log(pixelSpacingArray.length);
+
     //2次元複素データの用意
-    const complex2D =  convertTo2D(imgInfo.get('image').map((v)=>[v,0]), [imgInfo.get('height'), imgInfo.get('width')]);
-    const complexfilter = convertTo2D(filter.map((v)=>[v,0]), [arrayLength, arrayLength]);
-    await Promise.all(complex2D, complexfilter);
+    console.log("make complex");
+    let complex2D_p = convertTo2D(mergeToComplex(image), [height, width]);
+    let complexfilter_p = convertTo2D(mergeToComplex(filter), [arrayLength, arrayLength]);
+    const [complex2D, complexfilter] = await Promise.all([complex2D_p, complexfilter_p]);
+    console.log("maked complex");
     //DFTしてフィルターの適応
     // console.log(dft2D(complex2D).flat().map(v=> abs(v)).flat());
     //分割代入
     // let dftRe, dftIm
-    let [dftRe, dftIm]= separateFromComplex(dft2D(complex2D));
-    let [dftFilterRe, _dftFilterIm] = separateFromComplex(dft2D(complexfilter));
-    await Promise.all([dftRe, dftIm], [dftFilterRe, _dftFilterIm]);
-    const promiseRe = multiple2D(dftRe, dftFilterRe);
-    const promiseIm = multiple2D(dftIm, dftFilterRe);
-    let dftFilterd = mergeToComplex(await Promise.all(promiseRe, promiseIm));
+    // let [dftRe, dftIm]= separateFromComplex(dft2D(complex2D));
+    // let [dftFilterRe, _dftFilterIm] = separateFromComplex(dft2D(complexfilter));
+    // await Promise.all([dftRe, dftIm], [dftFilterRe, _dftFilterIm]);
+    // const promiseRe = multiple2D(dftRe, dftFilterRe);
+    // const promiseIm = multiple2D(dftIm, dftFilterRe);
+    let dft_p = separateFromComplex(dft2D(complex2D));
+    let filterDft_p = separateFromComplex(dft2D(complexfilter));
+    console.log("dft running...");
+    const [dft, filterDft] = await Promise.all([dft_p, filterDft_p]);
+    let multiRe_p = multiple2D(dft[0], filterDft[0]);
+    let multiIm_p = multiple2D(dft[1], filterDft[1]);
+    console.log(multiRe_p);
+    const multiReIm = await Promise.all([multiRe_p, multiIm_p]);
+    const dftFilterd = mergeToComplex(multiReIm);
+    console.log("dft finished.");
     console.log(dftFilterd);
     // console.log(dftFilterd.flat().map(v=>Math.abs(v)));
     // imgInfo.set("image", idft2D(dftFilterd).flat().map(v => Math.abs(v)));
@@ -421,11 +431,18 @@ async function separateFromComplex(complex2D){
 function mergeToComplex(real2D, imag2D) {
     const rows = real2D.length, columns = real2D[0].length;
     let complex2D = Array.from(Array(rows), _=>Array.from(Array(columns), _=>[0,0]));
-    
-    for (let i = 0; i < rows; i++) {
-        for (let j = 0 ; j < columns; j++) {
-            complex2D[i][j][0] = real2D[i][j];
-            complex2D[i][j][1] = imag2D[i][j];
+    if (imag2D == undefined) {
+        for (let i = 0; i < rows; i++) {
+            for (let j = 0; j < columns; j++) {
+                complex2D[i][j][0] = real2D[i][j];
+            }
+        }
+    }else{
+        for (let i = 0; i < rows; i++) {
+            for (let j = 0; j < columns; j++) {
+                complex2D[i][j][0] = real2D[i][j];
+                complex2D[i][j][1] = imag2D[i][j];
+            }
         }
     }
     return complex2D;
