@@ -275,44 +275,88 @@ const v1sum = c1d => c1d.reduce(add, zero());
 //転置
 const transpose = a => a[0].map((_, c) => a.map(r => r[c]));
 
+
 //変数名変えたほうがいい
 async function asyncDFT_2D(real2D, imaginary2D) {
+
+    let [dft_Re_1D, dft_Im_1D] = await axisMapDFT(real2D, imaginary2D);
+    console.log(transpose(dft_Re_1D));
+    console.log(dft_Im_1D);
+    const testc = dft_Re_1D.slice();
+    console.log(testc);
+        // console.log("dft_Re_1D", dft_Re_1D);
+        // const testc = dft_Re_1D.slice();
+        // console.log('testc', testc)
+        // // なぜか０になる
+        // const dft_Re_1D_T = transpose(dft_Re_1D), dft_Im_1D_T = transpose(dft_Im_1D);
+
+        // console.log('dft_Re_1D_T', dft_Re_1D_T);
+
+        // let result_Re_2D = dft_Re_1D_T.slice(), result_Im_2D = dft_Re_1D_T.slice();
+        // for (let i = 0; i < sampleRow; i++) {
+        //     asyncDFT_1D(dft_Re_1D_T[i], dft_Im_1D_T[i]).then(([re, im]) => {result_Re_2D[i] = re, result_Im_2D[i] = im});
+        // }
+        // await Promise.all([result_Re_2D, result_Im_2D]);
+        // console.log(result_Re_2D);
+
+        // let result_Re_2D_T = [], result_Im_2D_T = [];
+        // transform(result_Re_2D).then(v => result_Re_2D_T.push(v));
+        // transform(result_Im_2D).then(v => result_Im_2D_T.push(v));
+
+        // return await Promise.all([result_Re_2D_T, result_Im_2D_T]);
+
+
+}
+
+async function mapDFT_axis0(real2D, imaginary2D) {
     try {
         if (real2D.length != imaginary2D.length || real2D[0].length != imaginary2D[0].length) {
             throw new Error('実部と虚部の行列数が一致しません');
         }
         const sampleCol = real2D.length, sampleRow = real2D[0].length;
 
-        let result_Re_1D = Array.from(Array(sampleCol), _ => Array.from(Array(sampleRow), _=> 0)), result_Im_1D = Array.from(Array(sampleCol), _ => Array.from(Array(sampleRow), _=> 0));
+        let dft_Re_1D = Array.from(Array(sampleCol), _ => Array.from(Array(sampleRow), _ => 0)), dft_Im_1D = Array.from(Array(sampleCol), _ => Array.from(Array(sampleRow), _ => 0));
         for (let i = 0; i < sampleCol; i++) {
-            asyncDFT_1D(real2D[i], imaginary2D[i]).then(v=>{result_Re_1D[i]=v[0], result_Im_1D[i]=v[1]});
+            asyncDFT_1D(real2D[i], imaginary2D[i]).then(([re, im]) => { dft_Re_1D[i] = re, dft_Im_1D[i] = im; });
         }
-        await Promise.all([result_Re_1D, result_Im_1D]);
-        console.log(result_Re_1D);
-
-        let result_Re_1D_T = NaN, result_Im_1D_T = NaN;
-        asyncT(result_Re_1D).then(v=>result_Re_1D_T = v);
-        asyncT(result_Im_1D).then(v=>result_Im_1D_T = v);
-        await Promise.all([result_Re_1D_T, result_Im_1D_T]);
-        console.log(result_Re_1D_T);
-
-        let result_Re_2D = result_Re_1D_T.slice(), result_Im_2D = result_Im_1D_T.slice();
-        for (let i = 0; i < sampleRow; i++) {
-            asyncDFT_1D(result_Re_1D_T[i], result_Im_1D_T[i]).then(v=>{result_Re_2D[i]=v[0], result_Im_2D[i]=v[1]});
-        }
-        await Promise.all([result_Re_2D, result_Im_2D]);
-        console.log(result_Re_2D);
-
-        let result_Re_2D_T = NaN, result_Im_2D_T = NaN;
-        asyncT(result_Re_2D).then(v=>result_Re_2D_T = v);
-        asyncT(result_Im_2D).then(v=>result_Im_2D_T = v);
-
-        return await Promise.all([result_Re_2D_T, result_Im_2D_T]);
+        return await Promise.all([dft_Re_1D, dft_Im_1D]);
 
     } catch (error) {
         console.log("エラー:", error.message);
     }
 }
+
+async function dft_1D_T(real2D, imaginary2D){
+    const [re, im] = await mapDFT_axis0(real2D, imaginary2D);
+    return [transpose(re), transpose(im)];
+}
+
+
+async function mapDFT_axis1(real2D, imaginary2D) {
+    try {
+        const [dft_Re_1D_T, dft_Im_1D_T] = dft_1D_T(real2D, imaginary2D);
+
+        if (dft_Re_1D_T.length != dft_Im_1D_T.length || dft_Re_1D_T[0].length != dft_Im_1D_T[0].length) {
+            throw new Error('実部と虚部の行列数が一致しません');
+        }
+        const sampleCol = dft_Re_1D_T.length, sampleRow = dft_Re_1D_T[0].length;
+
+        let dft_Re_2D = Array.from(Array(sampleCol), _ => Array.from(Array(sampleRow), _ => 0)), dft_Im_2D = Array.from(Array(sampleCol), _ => Array.from(Array(sampleRow), _ => 0));
+        for (let i = 0; i < sampleCol; i++) {
+            asyncDFT_1D(dft_Re_1D_T[i], dft_Im_1D_T[i]).then(([re, im]) => { dft_Re_2D[i] = re, dft_Im_2D[i] = im; });
+        }
+        return await Promise.all([dft_Re_2D, dft_Im_2D]);
+
+    } catch (error) {
+        console.log("エラー:", error.message);
+    }
+}
+
+async function asyncDFT_2D(real2D, imaginary2D) {
+    const [re, im] = await mapDFT_axis1(real2D, imaginary2D);
+    return [transpose(re), transpose(im)];
+}
+
 
 //1次元DFTで非同期に行うmethodを実装する 
 async function asyncDFT_1D(real1D, imaginary1D) {
@@ -365,15 +409,15 @@ async function asyncIDFT_1D(real1D, imaginary1D) {
     }
 }
 
-async function asyncT(array2D) {
-    let result2D = Array.from(Array(array2D.length), _=>Array.from(Array(array2D[0].length), _=>0));
-    for (let i = 0; i < array2D.length; i++) {
-        for (let j = 0; j < array2D[0].length; j++) {
-            result2D[i][j] = array2D[j][i];
-        }
-    }
-    return result2D;
-}
+// function transform(array2D) {
+//     let result2D = Array.from(Array(array2D.length), _=>Array.from(Array(array2D[0].length), _=>0));
+//     for (let i = 0; i < array2D.length; i++) {
+//         for (let j = 0; j < array2D[0].length; j++) {
+//             result2D[i][j] = array2D[j][i];
+//         }
+//     }
+//     return result2D;
+// }
 
 async function asyncMul_Re(fn_Re, fn_Im, theta) {
     return fn_Re*Math.cos(theta) - fn_Im*Math.sin(theta);
