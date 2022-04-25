@@ -37,9 +37,7 @@ function inputChange(){
         // let ctx = canvas.getContext('2d');
         // let img = setImage(ctx, imgInfo);
         // imgInfo.set("image", makeBinary(imgInfo.get("image"), 3515));
-        gaussianFilter(imgInfo, FWHM=2).then(v=>console.log(v));
         // let img = setImage(ctx, imgInfo_gaussed);
-
         // ctx.putImageData(img, 0, 0);
 
     })
@@ -246,178 +244,17 @@ function filter_Sobel(imgInfo, isVertical) {
     ]);
 }
 
+//処理方法を変える
+/*
+1. フィルターを用意
+2. フィルターを転置する
+3. imageをDFTする
+4. フィルターをDFTする
+5. DFTしたもの同士を掛ける
+6. IDFTする
+*/
 
-//shape = [*, *]
-
-
-
-//ウィンドウ幅調節
-//ガウシアンフィルタ
-//2値化
-//これが一番きれい
-//回転を考慮しない外接矩形を求める
-
-//DFT
-//複素数演算の用意
-const zero = () => [0, 0];
-const expi = t => [Math.cos(t), Math.sin(t)];
-const add = ([ax, ay], [bx, by]) => [ax + bx, ay + by];
-const sub = ([ax, ay], [bx, by]) => [ax - bx, ay - by];
-const mul = ([ax, ay], [bx, by]) => [ax*bx - ay*by, ax*by, + ay * bx];
-const divr = ([ax, ay], r) => [ax / r, ay / r];
-const abs = ([a, ib]) => [Math.sqrt(a ^ 2 + ib ^ 2)];
-
-
-const v1mul = (a1d, b) => a1d.map(a => mul(a, b));
-const v1add = (a1d, b1d) => a1d.map((a, i) => add(a, b1d[i])); 
-const v1sub = (a1d, b1d) => a1d.map((a, i) => sub(a, b1d[i])); 
-const v1sum = c1d => c1d.reduce(add, zero());
-//転置
 const transpose = a => a[0].map((_, c) => a.map(r => r[c]));
-
-
-//変数名変えたほうがいい
-async function asyncDFT_2D(real2D, imaginary2D) {
-
-    let [dft_Re_1D, dft_Im_1D] = await axisMapDFT(real2D, imaginary2D);
-    console.log(transpose(dft_Re_1D));
-    console.log(dft_Im_1D);
-    const testc = dft_Re_1D.slice();
-    console.log(testc);
-        // console.log("dft_Re_1D", dft_Re_1D);
-        // const testc = dft_Re_1D.slice();
-        // console.log('testc', testc)
-        // // なぜか０になる
-        // const dft_Re_1D_T = transpose(dft_Re_1D), dft_Im_1D_T = transpose(dft_Im_1D);
-
-        // console.log('dft_Re_1D_T', dft_Re_1D_T);
-
-        // let result_Re_2D = dft_Re_1D_T.slice(), result_Im_2D = dft_Re_1D_T.slice();
-        // for (let i = 0; i < sampleRow; i++) {
-        //     asyncDFT_1D(dft_Re_1D_T[i], dft_Im_1D_T[i]).then(([re, im]) => {result_Re_2D[i] = re, result_Im_2D[i] = im});
-        // }
-        // await Promise.all([result_Re_2D, result_Im_2D]);
-        // console.log(result_Re_2D);
-
-        // let result_Re_2D_T = [], result_Im_2D_T = [];
-        // transform(result_Re_2D).then(v => result_Re_2D_T.push(v));
-        // transform(result_Im_2D).then(v => result_Im_2D_T.push(v));
-
-        // return await Promise.all([result_Re_2D_T, result_Im_2D_T]);
-
-
-}
-
-async function mapDFT_axis0(real2D, imaginary2D) {
-    try {
-        if (real2D.length != imaginary2D.length || real2D[0].length != imaginary2D[0].length) {
-            throw new Error('実部と虚部の行列数が一致しません');
-        }
-        const sampleCol = real2D.length, sampleRow = real2D[0].length;
-
-        let dft_Re_1D = Array.from(Array(sampleCol), _ => Array.from(Array(sampleRow), _ => 0)), dft_Im_1D = Array.from(Array(sampleCol), _ => Array.from(Array(sampleRow), _ => 0));
-        for (let i = 0; i < sampleCol; i++) {
-            asyncDFT_1D(real2D[i], imaginary2D[i]).then(([re, im]) => { dft_Re_1D[i] = re, dft_Im_1D[i] = im; });
-        }
-        return await Promise.all([dft_Re_1D, dft_Im_1D]);
-
-    } catch (error) {
-        console.log("エラー:", error.message);
-    }
-}
-
-async function dft_1D_T(real2D, imaginary2D){
-    const [re, im] = await mapDFT_axis0(real2D, imaginary2D);
-    return [transpose(re), transpose(im)];
-}
-
-
-async function mapDFT_axis1(real2D, imaginary2D) {
-    try {
-        const [dft_Re_1D_T, dft_Im_1D_T] = dft_1D_T(real2D, imaginary2D);
-
-        if (dft_Re_1D_T.length != dft_Im_1D_T.length || dft_Re_1D_T[0].length != dft_Im_1D_T[0].length) {
-            throw new Error('実部と虚部の行列数が一致しません');
-        }
-        const sampleCol = dft_Re_1D_T.length, sampleRow = dft_Re_1D_T[0].length;
-
-        let dft_Re_2D = Array.from(Array(sampleCol), _ => Array.from(Array(sampleRow), _ => 0)), dft_Im_2D = Array.from(Array(sampleCol), _ => Array.from(Array(sampleRow), _ => 0));
-        for (let i = 0; i < sampleCol; i++) {
-            asyncDFT_1D(dft_Re_1D_T[i], dft_Im_1D_T[i]).then(([re, im]) => { dft_Re_2D[i] = re, dft_Im_2D[i] = im; });
-        }
-        return await Promise.all([dft_Re_2D, dft_Im_2D]);
-
-    } catch (error) {
-        console.log("エラー:", error.message);
-    }
-}
-
-async function asyncDFT_2D(real2D, imaginary2D) {
-    const [re, im] = await mapDFT_axis1(real2D, imaginary2D);
-    return [transpose(re), transpose(im)];
-}
-
-
-//1次元DFTで非同期に行うmethodを実装する 
-async function asyncDFT_1D(real1D, imaginary1D) {
-    try {
-        if(real1D.length != imaginary1D.length){throw new Error('実部と虚部の要素数が一致しません');}
-        const sampleN = real1D.length;
-
-        let result_Re = Array.from(Array(sampleN), _ => 0), result_Im = Array.from(Array(sampleN), _ => 0);
-        for (let i = 0; i < sampleN; i++) {
-            let preTotal_Re = [], preTotal_Im = [];
-            for (let j = 0; j < sampleN; j++) {
-                const theta = (2 * Math.PI * i * j)/sampleN
-                asyncMul_Re(real1D[j], imaginary1D[j], theta).then(v =>preTotal_Re.push(v));//後々総和をとるので順番関係なくpushでOK
-                asyncMul_Im(real1D[j], imaginary1D[j], theta).then(v =>preTotal_Im.push(v));//ただし、同じ値をとる可能性があるのでsetは×
-            }
-            await Promise.all([preTotal_Re, preTotal_Im])
-            asyncTotal(preTotal_Re).then(v => result_Re[i] = v);
-            asyncTotal(preTotal_Im).then(v => result_Im[i] = v);
-            
-        }
-        return await Promise.all([result_Re, result_Im]);
-        
-    } catch (error) {
-        console.error("エラー:", error.message);
-    }
-}
-
-async function asyncIDFT_1D(real1D, imaginary1D) {
-    try {
-        if(real1D.length != imaginary1D.length){throw new Error('実部と虚部の要素数が一致しません');}
-        const sampleN = real1D.length;
-
-        let result_Re = Array.from(Array(sampleN), _ => 0), result_Im = Array.from(Array(sampleN), _ => 0);
-        for (let i = 0; i < sampleN; i++) {
-            let preTotal_Re = [], preTotal_Im = [];
-            for (let j = 0; j < sampleN; j++) {
-                const theta = (-2 * Math.PI * i * j)/sampleN
-                asyncMul_Re(real1D[j], imaginary1D[j], theta).then(v =>preTotal_Re.push(v));//後々総和をとるので順番関係なくpushでOK
-                asyncMul_Im(real1D[j], imaginary1D[j], theta).then(v =>preTotal_Im.push(v));
-            }
-            await Promise.all([preTotal_Re, preTotal_Im])
-            asyncTotal(preTotal_Re).then(v => result_Re[i] = v/sampleN);
-            asyncTotal(preTotal_Im).then(v => result_Im[i] = v/sampleN);
-            
-        }
-        return await Promise.all([result_Re, result_Im]);
-        
-    } catch (error) {
-        console.error("エラー:", error.message);
-    }
-}
-
-// function transform(array2D) {
-//     let result2D = Array.from(Array(array2D.length), _=>Array.from(Array(array2D[0].length), _=>0));
-//     for (let i = 0; i < array2D.length; i++) {
-//         for (let j = 0; j < array2D[0].length; j++) {
-//             result2D[i][j] = array2D[j][i];
-//         }
-//     }
-//     return result2D;
-// }
 
 async function asyncMul_Re(fn_Re, fn_Im, theta) {
     return fn_Re*Math.cos(theta) - fn_Im*Math.sin(theta);
@@ -431,62 +268,155 @@ async function asyncTotal(array1D){
     return array1D.reduce((sum, v)=> sum += v, 0);
 }
 
-//funcを生成するファクトリー関数
-//アロー関数のふるまいに注意すれば混乱しないはず
-//2要素の配列が戻り値である点に注意
-//フーリエ変換とフーリエ逆変換を作成する
-const dft2DMaker = dft2Dfunc => [
-    c2d => dft2Dfunc(-2 * Math.PI, c2d),
-    F2d => {
-        const f2d = dft2Dfunc(2 * Math.PI, F2d);
-        return f2d.map(c1d => c1d.map(c => divr(c, f2d.length * c1d.length)));
-    },
-];
-
-const dft1DCore = (constValue, c1d) => c1d.map((_, index) => v1sum(
-    c1d.map((c, i) => mul(c, expi(constValue * index * i / c1d.length)))));
-
-//複素2次平面を転置して一行ずつフーリエ変換する
-const dft2DCore = (constValue, c2d) => transpose(
-    transpose(c2d.map(c1d => dft1DCore(constValue, c1d))).map(c1d => dft1DCore(constValue, c1d)));
-
-const [dft2D, idft2D] = dft2DMaker(dft2DCore);
-//高速フーリエ変換の実装は後々やる
+async function asyncTotalDivLength(array1D){
+    return array1D.reduce((sum, v)=> sum += v, 0) / array1D.length;
+}
 
 
+async function mappingColumn(func, real2D, imaginary2D) {
+    const sampleCol = real2D.length;
+    let mappingPromise = [];
+    for (let i = 0; i < sampleCol; i++) {
+        mappingPromise[i] = func(real2D[i], imaginary2D[i]);
+    }
 
-function gaussProfMaker(pixelSpacingArray, FWHM) {
+    return Promise.all(mappingPromise);
+}
+
+async function asyncDFT1D(real1D, imaginary1D) {
+
+    if(real1D.length != imaginary1D.length){throw new Error('reject: 実部と虚部の要素数が一致しません');}
+    const sampleN = real1D.length;
+
+    let result_promise = [];
+    for (let i = 0; i < sampleN; i++) {
+        let innerFunc = [];
+        for (let j = 0; j < sampleN; j++) {
+            const theta = (-2 * Math.PI * i * j)/sampleN
+            innerFunc[j]= Promise.all([asyncMul_Re(real1D[j], imaginary1D[j], theta), asyncMul_Im(real1D[j], imaginary1D[j], theta)]);
+            
+        }
+        const pre_total =  await Promise.all(innerFunc);
+        const [pre_total_Re, pre_total_Im] =  transpose(pre_total);
+        result_promise[i] = Promise.all([asyncTotal(pre_total_Re), asyncTotal(pre_total_Im)]);
+    }
+    const result = await Promise.all(result_promise);
+    const [resultRe, resultIm] = transpose(result);
+
+    return [resultRe, resultIm];
+}
+
+async function asyncIDFT1D(real1D, imaginary1D) {
+
+    if(real1D.length != imaginary1D.length){throw new Error('reject: 実部と虚部の要素数が一致しません');}
+    const sampleN = real1D.length;
+
+    let result_promise = [];
+    for (let i = 0; i < sampleN; i++) {
+        let innerFunc = [];
+        for (let j = 0; j < sampleN; j++) {
+            const theta = (2 * Math.PI * i * j)/sampleN
+            innerFunc[j]= Promise.all([asyncMul_Re(real1D[j], imaginary1D[j], theta), asyncMul_Im(real1D[j], imaginary1D[j], theta)]);
+            
+        }
+        const pre_total =  await Promise.all(innerFunc);
+        const [pre_total_Re, pre_total_Im] =  transpose(pre_total);
+        result_promise[i] = Promise.all([asyncTotalDivLength(pre_total_Re), asyncTotalDivLength(pre_total_Im)]);
+    }
+    const result = await Promise.all(result_promise);
+    const [resultRe, resultIm] = transpose(result);
+
+    return [resultRe, resultIm];
+}
+
+async function asyncDFT2D(real2D, imaginary2D) {
+    if (real2D.length != imaginary2D.length || real2D[0].length != imaginary2D[0].length) {
+        throw new Error('reject: 実部と虚部の行列数が一致しません');
+    }
+    const dft_axis0 = await mappingColumn(asyncDFT1D, real2D, imaginary2D);
+    const [dft_axis0_T_Re, dft_axis0_T_Im] = transpose(dft_axis0);
+    const dft_T = await mappingColumn(asyncDFT1D, transpose(dft_axis0_T_Re), transpose(dft_axis0_T_Im));
+    const [dft_Re, dft_Im] = transpose(dft_T);
+
+    return [dft_Re, dft_Im];
+}
+
+async function asyncIDFT2D(real2D, imaginary2D) {
+    if (real2D.length != imaginary2D.length || real2D[0].length != imaginary2D[0].length) {
+        throw new Error('reject: 実部と虚部の行列数が一致しません');
+    }
+    const idft_axis0 = await mappingColumn(asyncIDFT1D, real2D, imaginary2D);
+    const [idft_axis0_T_Re, idft_axis0_T_Im] = transpose(idft_axis0);
+    const idft_T = await mappingColumn(asyncIDFT1D, transpose(idft_axis0_T_Re), transpose(idft_axis0_T_Im));
+    const [idft_Re, idft_Im] = transpose(idft_T);
+
+    return [idft_Re, idft_Im];
+}
+
+
+async function asyncMulti2D(array2Da, array2Db) {
+    if (array2Da.length != array2Db.length || array2Da[0].length != array2Db[0].length) {
+        throw new Error('reject: 2つの行列の行列数が一致しません');
+    }
+    const columns = array2Da.length
+
+    let resultPromise = [];
+    for (let i = 0; i < columns; i++) {
+        resultPromise[i] = asyncMulti1D(array2Da[i], array2Db[i]);
+    }
+    return Promise.all(resultPromise);
+}
+
+async function asyncMulti1D(array1Da, array1Db) {
+    if (array1Da.length != array1Db.length) {
+        throw new Error('reject: 配列の長さが一致しません');
+    }
+    const length = array1Da.length;
+
+    let resultPromise = [];
+    for (let i = 0; i < length; i++) {
+        resultPromise[i] = asyncMulti(array1Da[i], array1Db[i]);
+    }
+
+    return Promise.all(resultPromise);
+}
+
+async function asyncMulti(a, b) {
+    return a*b;
+}
+
+async function gaussProfMaker(pixelSpacingArray, FWHM) {
     const alpha = (4*Math.log10(2))/(FWHM**2);
-    return normalize(pixelSpacingArray.map(v=>Math.sqrt(alpha/Math.PI)*Math.exp(-alpha*v**2))); 
+    let gaussPromise = [];
+    for (let i = 0; i < pixelSpacingArray.length; i++) {
+        gaussPromise[i] = gaussfunc(pixelSpacingArray[i], alpha);
+    }
+    const gaussResult = await Promise.all(gaussPromise);
+    
+    return await normalize(gaussResult);
 }
 
-// async function filter2DMaker(profArray1D, height) {
-//     let duplicate = Array.from(Array(height), _=>profArray1D);
-//     //行列の掛け算の実装
-//     let filter2D = await multiple2D(duplicate, transpose(duplicate))
-//     console.log(filter2D);
-//     return convertTo2D(normalize(filter2D.flat()), profArray1D.length);
-// }
-
-// async function filter2DMaker(profArray1D, columns) {
-//     let duplicate = Array.from(Array(columns), _=>profArray1D);
-//     const shape = [columns, profArray1D.length]
-//     let filter2D = await multiple2D(duplicate, transpose(duplicate));
-//     return convertTo2D(normalize(filter2D.flat()), shape);
-// }
-
-async function filterMaker(profArray1D, columns) {
-    let duplicate = Array.from(Array(columns), _=>profArray1D);
-    let filter2D = await multiple2D(duplicate, transpose(duplicate));
-    return normalize(filter2D.flat());
+async function gaussfunc(value, alpha) {
+    return Math.sqrt(alpha / Math.PI) * Math.exp(-alpha * value ** 2);
 }
 
-function normalize(array1D) {
+async function normalize(array1D) {
     const maxV = array1D.reduce((maxV, v)=>Math.max(maxV, v), -Infinity);
-    return array1D.map(v => v/maxV);
+    let resultPromise = [];
+    for (let i = 0; i < array1D.length; i++) {
+        resultPromise[i] = asyncMulti(array1D[i], 1/maxV);
+    }
+    return Promise.all(resultPromise);
 }
 
-async function convertTo2D(array1D, shape) {
+async function filterMaker2D(profArray1D, columns) {
+    let duplicate = Array.from(Array(columns), _=>profArray1D);
+    const filter2D = await asyncMulti2D(duplicate, transpose(duplicate));
+    const normalized = await normalize(filter2D.flat());
+    return convertTo2D(normalized, [profArray1D.length, columns]);
+}
+
+function convertTo2D(array1D, shape) {
     try{
         let array2D = [], arraytmp = array1D.slice(0, array1D.length);
         if (shape[0]*shape[1] != array1D.length) {
@@ -505,106 +435,91 @@ async function convertTo2D(array1D, shape) {
 //complexの分離と結合をやめる
 //dftの引数を実部の２次元行列と虚部の2次元行列の2つにする
 
-async function gaussianFilter(imgInfo, FWHM) {
-    const image = imgInfo.get('image'), width = imgInfo.get('width'), height = imgInfo.get('height'), pixelSpacing = imgInfo.get('pixelSpacing')[0];
-    //pixelSpacingArrayの作成
-    // profileMtx = (float(x)*pixelSize for x in range(-int(mtx/2), int(mtx/2)))
-    //heightとwidthで大きいほうを選択
-    const arrayLength = width > height ? width : height;
-    const halfLength = Math.floor(arrayLength/2);
-    // const pixelSpacingArray = Array.from(Array(arrayLength), (_, k)=>k*imgInfo.get('pixelSpacing')[0]);
-    const pixelSpacingArray = Array.from(range(-halfLength + 1, halfLength), v => v * pixelSpacing);
-    // const testarray = Array.from(range(-halfLength, halfLength), v=> v);
-    // console.log(testarray);
-    //gaussianFilterの作成
-    let filter = await filterMaker(gaussProfMaker(pixelSpacingArray, FWHM), arrayLength);
 
-    //2次元複素データの用意
-    console.log("make complex");
-    let complex2D_p = convertTo2D(mergeToComplex(image), [height, width]);
-    let complexfilter_p = convertTo2D(mergeToComplex(filter), [arrayLength, arrayLength]);
-    const [complex2D, complexfilter] = await Promise.all([complex2D_p, complexfilter_p]);
-    console.log("maked complex");
-    //DFTしてフィルターの適応
-    // console.log(dft2D(complex2D).flat().map(v=> abs(v)).flat());
-    //分割代入
-    // let dftRe, dftIm
-    // let [dftRe, dftIm]= separateFromComplex(dft2D(complex2D));
-    // let [dftFilterRe, _dftFilterIm] = separateFromComplex(dft2D(complexfilter));
-    // await Promise.all([dftRe, dftIm], [dftFilterRe, _dftFilterIm]);
-    // const promiseRe = multiple2D(dftRe, dftFilterRe);
-    // const promiseIm = multiple2D(dftIm, dftFilterRe);
-    let dft_p = separateFromComplex(dft2D(complex2D));
-    let filterDft_p = separateFromComplex(dft2D(complexfilter));
-    console.log("dft running...");
-    const [dft, filterDft] = await Promise.all([dft_p, filterDft_p]);
-    let multiRe_p = multiple2D(dft[0], filterDft[0]);
-    let multiIm_p = multiple2D(dft[1], filterDft[1]);
-    console.log(multiRe_p);
-    const multiReIm = await Promise.all([multiRe_p, multiIm_p]);
-    const dftFilterd = mergeToComplex(multiReIm);
-    console.log("dft finished.");
-    console.log(dftFilterd);
-    // console.log(dftFilterd.flat().map(v=>Math.abs(v)));
-    // imgInfo.set("image", idft2D(dftFilterd).flat().map(v => Math.abs(v)));
-    // return imgInfo;
-}
+// async function gaussianFilter(imgInfo, FWHM) {
+//     const image = imgInfo.get('image'), width = imgInfo.get('width'), height = imgInfo.get('height'), pixelSpacing = imgInfo.get('pixelSpacing')[0];
+//     //pixelSpacingArrayの作成
+//     // profileMtx = (float(x)*pixelSize for x in range(-int(mtx/2), int(mtx/2)))
+//     //heightとwidthで大きいほうを選択
+//     const arrayLength = width > height ? width : height;
+//     const halfLength = Math.floor(arrayLength/2);
+//     // const pixelSpacingArray = Array.from(Array(arrayLength), (_, k)=>k*imgInfo.get('pixelSpacing')[0]);
+//     const pixelSpacingArray = Array.from(range(-halfLength + 1, halfLength), v => v * pixelSpacing);
+//     // const testarray = Array.from(range(-halfLength, halfLength), v=> v);
+//     // console.log(testarray);
+//     //gaussianFilterの作成
+//     let filter = await filterMaker(gaussProfMaker(pixelSpacingArray, FWHM), arrayLength);
 
-async function asyncMulti(a, b) {
-    return a*b;
-}
-
-async function multiple2D(a2D, b2D) {
-    const rows = a2D.length, columns = a2D[0].length;
-
-    let result2D = Array.from(Array(rows), _=>Array.from(Array(columns), _=>0));
-    //非同期反復処理
-    for (let i = 0; i < rows; i++) {
-        for (let j = 0 ; j < columns; j++) {
-            asyncMulti(a2D[i][j], b2D[i][j]).then(v=>result2D[i][j]=v);
-        }
-    }
-
-    return await Promise.all(result2D);
-}
-
-function total2D(array2D) {
-    return array2D.flat().reduce((sum, v)=>sum += v, 0);
-}
-
-function* range(start, end) {while (start <= end) {yield start++}}
+//     //2次元複素データの用意
+//     console.log("make complex");
+//     let complex2D_p = convertTo2D(mergeToComplex(image), [height, width]);
+//     let complexfilter_p = convertTo2D(mergeToComplex(filter), [arrayLength, arrayLength]);
+//     const [complex2D, complexfilter] = await Promise.all([complex2D_p, complexfilter_p]);
+//     console.log("maked complex");
+//     //DFTしてフィルターの適応
+//     // console.log(dft2D(complex2D).flat().map(v=> abs(v)).flat());
+//     //分割代入
+//     // let dftRe, dftIm
+//     // let [dftRe, dftIm]= separateFromComplex(dft2D(complex2D));
+//     // let [dftFilterRe, _dftFilterIm] = separateFromComplex(dft2D(complexfilter));
+//     // await Promise.all([dftRe, dftIm], [dftFilterRe, _dftFilterIm]);
+//     // const promiseRe = multiple2D(dftRe, dftFilterRe);
+//     // const promiseIm = multiple2D(dftIm, dftFilterRe);
+//     let dft_p = separateFromComplex(dft2D(complex2D));
+//     let filterDft_p = separateFromComplex(dft2D(complexfilter));
+//     console.log("dft running...");
+//     const [dft, filterDft] = await Promise.all([dft_p, filterDft_p]);
+//     let multiRe_p = multiple2D(dft[0], filterDft[0]);
+//     let multiIm_p = multiple2D(dft[1], filterDft[1]);
+//     console.log(multiRe_p);
+//     const multiReIm = await Promise.all([multiRe_p, multiIm_p]);
+//     const dftFilterd = mergeToComplex(multiReIm);
+//     console.log("dft finished.");
+//     console.log(dftFilterd);
+//     // console.log(dftFilterd.flat().map(v=>Math.abs(v)));
+//     // imgInfo.set("image", idft2D(dftFilterd).flat().map(v => Math.abs(v)));
+//     // return imgInfo;
+// }
 
 
-//実部と虚部を分けるmethod
-async function separateFromComplex(complex2D){
-    const rows = complex2D.length, columns = complex2D[0].length;
-    let real2D = Array.from(Array(rows), _=>Array.from(Array(columns), _=>0));
-    let imag2D = Array.from(Array(rows), _=>Array.from(Array(columns), _=>0));
 
-    for (let i = 0; i < rows; i++) {
-        for (let j = 0 ; j < columns; j++) {
-            real2D[i][j] = complex2D[i][j][0]
-            imag2D[i][j] = complex2D[i][j][1]
-        }
-    }
-    return [real2D, imag2D];
-}
-function mergeToComplex(real2D, imag2D) {
-    const rows = real2D.length, columns = real2D[0].length;
-    let complex2D = Array.from(Array(rows), _=>Array.from(Array(columns), _=>[0,0]));
-    if (imag2D == undefined) {
-        for (let i = 0; i < rows; i++) {
-            for (let j = 0; j < columns; j++) {
-                complex2D[i][j][0] = real2D[i][j];
-            }
-        }
-    }else{
-        for (let i = 0; i < rows; i++) {
-            for (let j = 0; j < columns; j++) {
-                complex2D[i][j][0] = real2D[i][j];
-                complex2D[i][j][1] = imag2D[i][j];
-            }
-        }
-    }
-    return complex2D;
-}
+// function total2D(array2D) {
+//     return array2D.flat().reduce((sum, v)=>sum += v, 0);
+// }
+
+// function* range(start, end) {while (start <= end) {yield start++}}
+
+
+// //実部と虚部を分けるmethod
+// async function separateFromComplex(complex2D){
+//     const rows = complex2D.length, columns = complex2D[0].length;
+//     let real2D = Array.from(Array(rows), _=>Array.from(Array(columns), _=>0));
+//     let imag2D = Array.from(Array(rows), _=>Array.from(Array(columns), _=>0));
+
+//     for (let i = 0; i < rows; i++) {
+//         for (let j = 0 ; j < columns; j++) {
+//             real2D[i][j] = complex2D[i][j][0]
+//             imag2D[i][j] = complex2D[i][j][1]
+//         }
+//     }
+//     return [real2D, imag2D];
+// }
+// function mergeToComplex(real2D, imag2D) {
+//     const rows = real2D.length, columns = real2D[0].length;
+//     let complex2D = Array.from(Array(rows), _=>Array.from(Array(columns), _=>[0,0]));
+//     if (imag2D == undefined) {
+//         for (let i = 0; i < rows; i++) {
+//             for (let j = 0; j < columns; j++) {
+//                 complex2D[i][j][0] = real2D[i][j];
+//             }
+//         }
+//     }else{
+//         for (let i = 0; i < rows; i++) {
+//             for (let j = 0; j < columns; j++) {
+//                 complex2D[i][j][0] = real2D[i][j];
+//                 complex2D[i][j][1] = imag2D[i][j];
+//             }
+//         }
+//     }
+//     return complex2D;
+// }
