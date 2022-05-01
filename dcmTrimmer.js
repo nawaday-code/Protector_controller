@@ -28,13 +28,15 @@ function inputChange(){
 
         //画像処理部分。後々スクリプト分ける。
         //以下非同期処理で
-
-
+        const img = []
+        gaussianFilter(imgInfo, FWHM=2).then(v => {img.push(v), console.log("Process end.",v)});
+        
 
         // let canvas = document.getElementById('imgView');
         // canvas.width = imgInfo.get("width");
         // canvas.height = imgInfo.get("height");
         // let ctx = canvas.getContext('2d');
+
         // let img = setImage(ctx, imgInfo);
         // imgInfo.set("image", makeBinary(imgInfo.get("image"), 3515));
         // let img = setImage(ctx, imgInfo_gaussed);
@@ -244,15 +246,6 @@ function filter_Sobel(imgInfo, isVertical) {
     ]);
 }
 
-//処理方法を変える
-/*
-1. フィルターを用意
-2. フィルターを転置する
-3. imageをDFTする
-4. フィルターをDFTする
-5. DFTしたもの同士を掛ける
-6. IDFTする
-*/
 
 const transpose = a => a[0].map((_, c) => a.map(r => r[c]));
 
@@ -432,6 +425,51 @@ function convertTo2D(array1D, shape) {
 
 }
 
+
+//処理方法を変える
+/*
+1. フィルターを用意
+2. フィルターを転置する
+3. imageをDFTする
+4. フィルターをDFTする
+5. DFTしたもの同士を掛ける
+6. IDFTする
+*/
+function* range(start, end) {while (start <= end) {yield start++}}
+
+
+
+async function gaussianFilter(imgInfo, FWHM) {
+    const image = imgInfo.get('image'), width = imgInfo.get('width'), height = imgInfo.get('height'), pixelSpacing = imgInfo.get('pixelSpacing')[0];
+    const image_Re =convertTo2D(image, [width, height]), zero_Im = Array.from(Array(height), _ => Array.from(Array(width), _ => 0));
+    const arrayLength = width > height ? width : height;
+    const halfLength = Math.floor(arrayLength/2);
+    const pixelSpacingArray = Array.from(range(-halfLength + 1, halfLength), v => v * pixelSpacing);
+    // console.log(pixelSpacingArray);
+    const gaussProf = await gaussProfMaker(pixelSpacingArray, FWHM);
+    console.log("gaussProf finished.");
+    const filter = await filterMaker2D(gaussProf, arrayLength);
+    console.log("filterMaker finished.");
+
+    const filter_T = transpose(filter);
+    console.log("transpose finished");
+    console.log("length compare", image_Re.length,zero_Im.length,image_Re[0].length, zero_Im[0].length);
+
+    const imgDFT_promise = asyncDFT2D(image_Re, zero_Im);
+    const filterDFT_Promise = asyncDFT2D(filter_T, zero_Im);
+    const [imgDFT, filterDFT] = await Promise.all([imgDFT_promise, filterDFT_Promise]);
+    console.log("DFT finished.");
+
+
+    const filtered_Re = asyncMulti2D(imgDFT[0], filterDFT[0]);
+    const filtered_Im = asyncMulti2D(imgDFT[1], filterDFT[1]);
+
+    const [result_Re, result_Im] = await Promise.all([filtered_Re, filtered_Im]);
+    console.log("処理修了")
+
+    return asyncIDFT2D(result_Re, result_Im);
+}
+
 //complexの分離と結合をやめる
 //dftの引数を実部の２次元行列と虚部の2次元行列の2つにする
 
@@ -487,7 +525,6 @@ function convertTo2D(array1D, shape) {
 //     return array2D.flat().reduce((sum, v)=>sum += v, 0);
 // }
 
-// function* range(start, end) {while (start <= end) {yield start++}}
 
 
 // //実部と虚部を分けるmethod
