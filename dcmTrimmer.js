@@ -346,6 +346,10 @@ async function asyncIDFT2D(real2D, imaginary2D) {
     return [idft_Re, idft_Im];
 }
 
+async function asyncFFT(real2D, imaginary2D) {
+     
+}
+
 
 async function asyncMulti2D(array2Da, array2Db) {
     if (array2Da.length != array2Db.length || array2Da[0].length != array2Db[0].length) {
